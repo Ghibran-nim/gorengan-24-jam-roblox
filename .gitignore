@@ -1,0 +1,9 @@
+# Project place file
+/gorengan-24-jam-roblox.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+sourcemap.json
+.agents/
