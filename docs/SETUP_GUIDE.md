@@ -53,9 +53,7 @@ DataModel
 ├── ReplicatedStorage/
 │   ├── Shared/
 │   │   ├── Config/
-│   │   │   ├── EconomyConfig
-│   │   │   ├── GameConfig
-│   │   │   └── RecipesConfig
+│   │   │   └── (10 modul konfigurasi: GameConfig, EconomyConfig, RecipesConfig, UpgradesConfig, ProgressionConfig, ChiliGachaConfig, CustomerConfig, TimeScheduleConfig, EventsConfig, DataConfig)
 │   │   ├── Network/
 │   │   │   ├── NetworkBridge
 │   │   │   └── Remotes
@@ -72,22 +70,13 @@ DataModel
 │       └── ...
 │
 ├── ServerScriptService/
-│   └── Server/ (Script)
-│       ├── init.server.luau
-│       └── Services/
-│           ├── CookingService (ModuleScript)
-│           ├── EconomyService (ModuleScript)
-│           ├── GameService (ModuleScript)
-│           └── NetworkService (ModuleScript)
+│   └── Server/ (Script -> init.server.luau)
+│       └── Services/ (17 Services: Game, Network, Map, Cart, Inventory, Cooking, Customer, Economy, Satpol, Throwable, Progression, Chili, Time, Event, Social, Data, Tutorial)
 │
 ├── StarterPlayer/
 │   └── StarterPlayerScripts/
-│       └── Client/ (LocalScript)
-│           ├── init.client.luau
-│           └── Controllers/
-│               ├── GameController (ModuleScript)
-│               ├── HUDController (ModuleScript)
-│               └── NetworkController (ModuleScript)
+│       └── Client/ (LocalScript -> init.client.luau)
+│           └── Controllers/ (16 Controllers: HUD, Game, Network, Cart, Inventory, Cooking, CustomerUI, ShopUI, Raid, Throwable, Progression, Chili, TimeAndEvent, Social, AudioVFX, Tutorial)
 │
 └── StarterGui/
     (ResetPlayerGuiOnSpawn: false)
@@ -99,31 +88,15 @@ DataModel
 
 1. Di Roblox Studio, tekan tombol **Play** (F5).
 2. Buka jendela **Output** (`View` -> `Output`).
-3. Periksa log yang dihasilkan saat startup:
+3. Pastikan log `Initializing 17 registered modules...` (server) dan `Initializing 16 registered modules...` (client) selesai tanpa Luau runtime error.
 
-**Log Server yang Diharapkan:**
-```text
-[xx:xx:xx] [INFO] [ServerBootstrap]: Memulai server bootloader 'Gorengan 24 Jam: Awas Satpol!'...
-[xx:xx:xx] [INFO] [ServiceRunner]: Initializing 4 registered modules...
-[xx:xx:xx] [INFO] [NetworkBridge]: Server network remotes successfully initialized in ReplicatedStorage.
-[xx:xx:xx] [INFO] [ServiceRunner]: All modules successfully initialized.
-[xx:xx:xx] [INFO] [ServiceRunner]: Starting 4 registered modules...
-[xx:xx:xx] [INFO] [GameService]: Pemain bergabung: Player1 (ID: xxxxx)
-[xx:xx:xx] [INFO] [GameService]: Plot gerobak #1 dialokasikan untuk pemain Player1
-[xx:xx:xx] [INFO] [EconomyService]: Dompet awal disiapkan untuk Player1: Rp 50000 Kas | Rp 0 Tabungan
-[xx:xx:xx] [INFO] [ServerBootstrap]: Server bootloader berhasil diselesaikan. Server siap melayani pemain.
-```
+---
 
-**Log Client yang Diharapkan:**
-```text
-[xx:xx:xx] [INFO] [ClientBootstrap]: Memulai client bootloader 'Gorengan 24 Jam: Awas Satpol!'...
-[xx:xx:xx] [INFO] [NetworkBridge]: Client network remotes linked successfully.
-[xx:xx:xx] [INFO] [ServiceRunner]: Initializing 3 registered modules...
-[xx:xx:xx] [INFO] [ServiceRunner]: All modules successfully initialized.
-[xx:xx:xx] [INFO] [ServiceRunner]: Starting 3 registered modules...
-[xx:xx:xx] [INFO] [HUDController]: HUD Update -> Kas: Rp 50000 | Bank: Rp 0 | Reputasi: 100
-[xx:xx:xx] [INFO] [ClientBootstrap]: Client bootloader berhasil diselesaikan. UI dan Controller siap berinteraksi.
-```
+## 5. Panduan Pengembangan (*Development Guide*)
+
+1. **Pemisahan Tanggung Jawab:** Letakkan seluruh logika otoritatif (uang, stok, masak, RNG, AI, cooldown, penyimpanan) pada `src/server/Services/`. Controller client di `src/client/Controllers/` hanya menangani input PC/Mobile, animasi/suara, dan rendering UI.
+2. **Konfigurasi Terpusat:** Tambah atau ubah angka balancing hanya pada `src/shared/Config/*.luau` dan definisi remote baru pada `src/shared/Network/Remotes.luau` + `NetworkBridge.luau`.
+3. **Standar Kode & Keamanan:** Gunakan `--!strict`, validasi tipe/jarak/kepemilikan/rate-limit pada setiap handler remote, dan jalankan uji di **Roblox Studio Play Mode** (dan *Local Server* untuk fitur multiplayer) sebelum memperbarui [docs/DEVELOPMENT_STATUS.md](docs/DEVELOPMENT_STATUS.md).
 
 ---
 

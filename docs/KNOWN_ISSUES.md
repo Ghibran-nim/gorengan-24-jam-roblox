@@ -26,20 +26,49 @@ Dokumen ini mencatat masalah teknis yang teridentifikasi, keterbatasan sistem, d
 
 ### ISSUE-003: Risiko Eksploitasi Network Ownership pada Mekanik Dorong Gerobak
 - **Tingkat Keparahan:** High (Multiplayer / Security)
-- **Status:** Planned Mitigation
-- **Deskripsi:** Jika network ownership model gerobak diserahkan sepenuhnya ke client yang mendorong demi kehalusan kontrol lokal, exploiter dapat memanipulasi posisi gerobak untuk berpindah seketika ke Safe Zone saat Satpol datang, atau melontarkan gerobak pemain lain.
-- **Mitigasi:** Implementasi server validation loop: Server memantau kecepatan delta (`Magnitude(pos_now - pos_last) / delta_time`). Jika kecepatan melebihi batas gerobak maksimum (+ toleransi latensi), server membatalkan posisi dan mengembalikan ke titik aman sebelumnya.
+- **Status:** Mitigated (Prompt 08 & Prompt 16)
+- **Deskripsi:** Jika posisi gerobak dimanipulasi client secara sepihak, exploiter dapat memindahkan gerobak seketika ke Safe Zone atau memiringkan model.
+- **Mitigasi Terimplementasi:** `CartService.luau` memvalidasi `RequestUpdateCartPosition` di server dengan pemeriksaan `CFrame` finite/anti-`NaN`, anti-tilt, kecepatan delta maksimal, serta koreksi kembali ke posisi aman terakhir bila melampaui batas.
 
 ---
 
 ### ISSUE-004: Potensi Beban CPU pada Spawning & Pathfinding Massal NPC
 - **Tingkat Keparahan:** Medium (Server Performance)
-- **Status:** Planned Mitigation
-- **Deskripsi:** Jika terdapat 8 pemain dengan masing-masing 3-4 antrean pelanggan plus NPC Satpol PP dan pejalan kaki, total NPC aktif dapat mencapai 35-45 karakter di dalam satu server. Kalkulasi pathfinding simultan berpotensi menyebabkan micro-stuttering pada server thread.
-- **Mitigasi:** 
-  - Terapkan *global NPC budget cap* (maksimal 25-30 NPC aktif sekaligus).
-  - Gunakan navigasi langsung (*raycast straight line*) untuk area trotoar terbuka dan hanya gunakan `PathfindingService` saat ada rintangan dinamis.
-  - Staggering update loop NPC (jangan menghitung state seluruh NPC pada frame yang sama).
+- **Status:** Mitigated (Prompt 06, Prompt 15, & Prompt 16)
+- **Deskripsi:** Banyak pelanggan NPC, Satpol PP, dan event NPC bersamaan dapat membebani CPU server/client.
+- **Mitigasi Terimplementasi:** Batas antrean 3 pelanggan per plot (+1 slot event), animasi walk swing NPC dipindahkan ke client (`AudioVFXController.luau`) dengan frequency `20Hz` + distance culling `<= 95 studs`, serta event-driven NPC tracking tanpa scan `Workspace` per frame.
+
+---
+
+### ISSUE-006: Place Masih Lokal & Belum Dipublish (`GameId = 0`, `PlaceId = 0`)
+- **Tingkat Keparahan:** Critical for Release (Persistence & Dashboard Settings)
+- **Status:** Open (Menunggu Persetujuan Publikasi Pemilik)
+- **Deskripsi:** `Place1.rbxl` belum dipublish ke Roblox Cloud sehingga `DataStoreService` melempar error lokal dan otomatis memakai mode fallback memori sesi.
+- **Mitigasi:** Publish privat ke Roblox, aktifkan *Studio Access to API Services*, dan uji round-trip cloud DataStore nyata sebelum Public Beta.
+
+---
+
+### ISSUE-007: Ketidaksesuaian `Players.MaxPlayers` Studio (`30`) vs Kapasitas Plot (`8`)
+- **Tingkat Keparahan:** High for Release (Server Capacity)
+- **Status:** Open (Belum Diubah Tanpa Izin Pemilik)
+- **Deskripsi:** Pemeriksaan DataModel Studio menunjukkan `Players.MaxPlayers = 30`, sedangkan `GameConfig.MaxPlayers` dan `Workspace.Map.PlayerPlots` dirancang untuk maksimal **8 pemain**.
+- **Mitigasi:** Wajib set `MaxPlayers = 8` pada Place Settings / Creator Dashboard sebelum server dibuka untuk pemain beta.
+
+---
+
+### ISSUE-008: Evaluasi `Workspace.StreamingEnabled = true` Belum Diuji Multi-Pemain Jaringan Nyata
+- **Tingkat Keparahan:** Medium (Replication / Streaming)
+- **Status:** Open (Requires Live Private Server Check)
+- **Deskripsi:** Properti `StreamingEnabled = true` aktif di `Place1.rbxl`. Pada skenario jaringan publik dengan bandwidth lambat, objek gerobak/NPC jauh berpotensi mengalami delay stream.
+- **Mitigasi:** Uji pada server private Roblox; nonaktifkan atau atur `ModelStreamingMode` bila ditemukan kendala visibilitas antargerobak.
+
+---
+
+### ISSUE-009: Monetisasi (Gamepasses & Developer Products) Belum Terimplementasi
+- **Tingkat Keparahan:** Low (Opsional untuk Beta F2P)
+- **Status:** Open / Deferred
+- **Deskripsi:** Belum ada integrasi `MarketplaceService` (`ProcessReceipt` / `UserOwnsGamePassAsync`) di codebase. Permainan berjalan 100% Free-to-Play.
+- **Mitigasi:** Rancangan lengkap & pengaman keseimbangan tersedia di `docs/MONETIZATION_DESIGN.md` bila monetisasi akan diaktifkan.
 
 ---
 

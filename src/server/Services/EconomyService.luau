@@ -265,8 +265,10 @@ function EconomyService:BuyIngredient(player: Player, packId: any): { Success: b
         return { Success = false, Error = "Layanan inventaris tidak aktif!" }
     end
 
-    -- Tambah stok bahan ke inventaris
-    local added = inventoryService:HandleTakeIngredients(player, pack.Id, pack.Amount)
+    -- Tambah stok bahan ke inventaris melalui API internal toko
+    local added = if inventoryService.GrantPurchasedIngredients
+        then inventoryService:GrantPurchasedIngredients(player, pack.Id, pack.Amount)
+        else inventoryService:HandleTakeIngredients(player, pack.Id, pack.Amount)
     if not added or not added.Success then
         return { Success = false, Error = added and added.Error or "Gagal menambahkan stok bahan!" }
     end

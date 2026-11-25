@@ -95,6 +95,11 @@ function ProgressionService:Start()
                     cartService:UpdateCartCookPrompt(player, recipe.Name)
                 end
                 self:SyncProgression(player)
+                local socialService = self:_getService("SocialService")
+                if socialService and socialService.RefreshPlayerStats then
+                    socialService:RefreshPlayerStats(player)
+                    socialService:ScheduleLeaderboardBroadcast()
+                end
             end,
             function(player: Player, profile: any)
                 local prog = self._playerProgress[player.UserId]

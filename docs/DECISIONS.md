@@ -158,3 +158,12 @@ Dokumen ini mencatat keputusan arsitektural dan desain penting, latar belakang a
   - Animasi jalan NPC (`Customer_*` & `Satpol_*`) digerakkan melalui `Motor6D` di sisi client pada 20Hz dan hanya untuk model dalam radius 95 studs (`distance culled`) sehingga tidak membebani jaringan maupun server.
   - Menyediakan menu **Pengaturan (`SettingsHUD`)** berisi kontrol SFX, suara lingkungan/hujan, preset volume, dan mode grafis hemat (**Low-FX**) untuk kompatibilitas perangkat mobile spesifikasi rendah.
 - **Konsekuensi:** Bebas error pemuatan asset, hemat CPU/memori pada perangkat mobile, tetap responsif secara visual/audio di PC maupun layar sentuh.
+
+
+## ADR-018: Optimasi UI/NPC & Pemisahan Otorisasi Remote Audit (Prompt 16)
+- **Konteks:** Audit performa dan keamanan menemukan 3 remote pemicu event/razia tanpa guard otorisasi produksi, celah pengambilan bahan toko lewat `RequestTakeIngredients`, validasi `CFrame` dorong gerobak yang belum menyaring `NaN`/pitch-roll, serta alokasi ulang frame pil event UI tiap `0.5s` dan scan `Workspace` 20Hz.
+- **Keputusan:**
+  - Menambahkan `NetworkBridge.IsAuthorizedAdmin`, `IsFiniteNumber`, dan `IsFiniteVector3` sebagai gerbang terpusat.
+  - Memisahkan `InventoryService:GrantPurchasedIngredients` (khusus toko internal) dari `RequestTakeIngredients` (kotak bahan dasar `"batter"`/`"veggies"` saja).
+  - Mengganti pola rebuild UI pil event, scan lampu jalan berulang, scan `Workspace` 20Hz, dan pencarian rekursif AI menjadi caching & event-driven tracking dengan pembersihan `Destroying`.
+- **Konsekuensi:** Menutup vektor eskalasi hak akses, celah ekonomi/fisika gerobak, dan menurunkan alokasi objek UI serta overhead CPU client pada perangkat mobile.

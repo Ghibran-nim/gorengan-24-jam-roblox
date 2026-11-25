@@ -222,18 +222,22 @@ function EventService:Init()
         }
     end)
 
-    -- Remote untuk pemicuan / penghentian event (Testing & Admin)
-    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestForceWorldEvent, function(_player: Player, action: any, eventId: any)
-        if typeof(action) ~= "string" then
+    -- Remote untuk pemicuan / penghentian event (Testing & Admin — hanya Studio / Creator)
+    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestForceWorldEvent, function(player: Player, action: any, eventId: any)
+        if not NetworkBridge.IsAuthorizedAdmin(player) then
+            log:Warn("SECURITY: Pemain %s mencoba memicu RequestForceWorldEvent tanpa izin!", player.Name)
+            return { Success = false, Error = "Akses ditolak: perintah khusus admin/Studio!" }
+        end
+        if typeof(action) ~= "string" or #action > 20 then
             return { Success = false, Error = "Aksi tidak valid!" }
         end
         if action == "StopAll" then
             self:StopAllEvents()
             return { Success = true }
-        elseif action == "Stop" and typeof(eventId) == "string" then
+        elseif action == "Stop" and typeof(eventId) == "string" and #eventId <= 40 then
             local stopped = self:StopEvent(eventId)
             return { Success = stopped }
-        elseif action == "Start" and typeof(eventId) == "string" then
+        elseif action == "Start" and typeof(eventId) == "string" and #eventId <= 40 then
             return self:StartEvent(eventId, true)
         end
         return { Success = false, Error = "Perintah event tidak dikenali!" }

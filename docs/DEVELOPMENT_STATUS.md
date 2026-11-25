@@ -1,6 +1,6 @@
 # DEVELOPMENT STATUS — GORENGAN 24 JAM: AWAS SATPOL!
 
-**Fase Berjalan:** Fase 5 Selesai (Visual, Audio, Animation & UI Polish — PROMPT 15 100% Runtime Studio PASS) — Siap QA Akhir & Publikasi Beta  
+**Fase Berjalan:** Seluruh Fase 0–5 & Full Game QA Selesai (PROMPT 17 — 20 Area Terverifikasi di Studio Play Mode) — Siap Publish Private Beta  
 **Terakhir Diperbarui:** 2026-11-25  
 
 ---
@@ -93,8 +93,12 @@
   - **World & Visual Polish (`MapService.luau`, `TimeService.luau`, `CartService.luau`):** Landmark *Tugu Gorengan Nusantara* di Central Hub, 2 *Pos Ronda & Kentongan Bambu* di gerbang Safe Zone, 10 pohon tropis low-poly, bangku trotoar, tong sampah, umbul-umbul Merah Putih, atmosfer & efek `GorenganBloom`/`GorenganSunRays`, detail gerobak (Tabung Gas Melon 3kg, botol sambal/kecap, pajangan etalase, strip kanopi, serta partikel emas `CrispySparkles`).
   - **NPC Rigs & Procedural Animation (`CustomerService.luau`, `SatpolService.luau`, `AudioVFXController.luau`):** Lengan, kaki `Motor6D`, mata ekspresif, dan aksesori arketipe (helm Ojol, kamera Food Vlogger, kacamata Sultan, ransel Mahasiswa, pentungan Satpol); animasi jalan prosedural client-side (20Hz, distance-culled `<= 95 studs`) serta animasi aksi memasak, mengambil bahan, melayani, dan mendorong gerobak.
   - **Audio Legal & Settings UI (`AudioVFXController.luau`, `CookingController.luau`, `ShopUIController.luau`, `CartController.luau`, `TimeAndEventController.luau`):** 14 slot efek suara `rbxasset://sounds/*` terverifikasi `IsLoaded == true` (minyak mendesis & splash, lonceng Crispy, mesin kasir, kentongan bambu, sirine Satpol, roda gerobak, hujan, ambience jalanan, klik UI), `UISizeConstraint` responsif untuk modal mobile, serta tombol **Pengaturan** (SFX, Ambience, Volume, Mode Grafis Hemat Low-FX).
+- **Performance & Security Audit (PROMPT 16):**
+  - **Keamanan (`NetworkBridge.luau`, `SatpolService.luau`, `EventService.luau`, `SocialService.luau`, `InventoryService.luau`, `CartService.luau`, `CustomerService.luau`):** Proteksi admin-only `IsAuthorizedAdmin` untuk 3 remote test/event, penutupan celah ambil bahan toko gratis di `RequestTakeIngredients` (`batter`/`veggies` only), validasi `CFrame` anti-`NaN`/orientasi miring di `UpdateCartPosition`, validasi `Vector3`/`customerId`/anti-ragdoll pada SafeZone & Serve.
+  - **Performa (`TimeAndEventController.luau`, `TimeService.luau`, `AudioVFXController.luau`, `CustomerService.luau`):** Reuse cached `EventPill` UI (0 alloc churn per 0.5s), caching lampu jalan `PointLight`, pelacakan NPC berbasis event (0 scan `Workspace:GetChildren()` 20Hz), pembersihan `_hookedButtons` via `Destroying`, dan penghapusan pencarian rekursif `FindFirstChild(..., true)` di loop kesabaran NPC.
+  - Laporan lengkap di [docs/PERFORMANCE_AUDIT.md](file:///c:/Users/HP/Downloads/gorengan-24-jam-roblox/docs/PERFORMANCE_AUDIT.md) dan [docs/SECURITY_AUDIT.md](file:///c:/Users/HP/Downloads/gorengan-24-jam-roblox/docs/SECURITY_AUDIT.md).
 
-## 2. Hasil Audit & Pengujian Runtime Studio (Phase 2, PROMPT 09, 10, 11, 12, 13, 14 & 15)
+## 2. Hasil Audit & Pengujian Runtime Studio (Phase 2, PROMPT 09–16)
 - **Phase 2 Playtest (PROMPT 08):** **12/12 PASS (100%)**.
 - **Throwable Burnt Food (PROMPT 09):** **9/9 Server & Security Tests PASS + 5/5 Real Client-Server Flow PASS (100%)**.
 - **Recipes, Upgrades & Progression (PROMPT 10):** **6/6 Server Progression/Upgrade Tests PASS + 3/3 Real Client-Server UI Flow PASS (100%)**.
@@ -127,7 +131,14 @@
   - `[PASS]` `Map.PolishDecorations` (`TuguGorenganNusantara`, `PosRonda_Barat/Timur`, `PohonTropis`), `GorenganAtmosphere`/`Bloom`/`SunRays`, serta detail gerobak (`TabungGasMelon`, `CrispySparkles`).
   - `[PASS]` NPC `Customer_CUST_*` dan `Satpol_*` memiliki joint `Motor6D` lengan/kaki lengkap & aksesori (`SatpolBaton`).
   - `[PASS]` Seluruh channel audio `GorenganAudioBank` berstatus `IsLoaded == true`, `SettingsHUD` (`DisplayOrder = 20`) & `ModalsHUD` memiliki `UISizeConstraint` responsif, dan tangkapan layar UI/Landmark terverifikasi bebas overlap.
+- **Performance & Security Audit (PROMPT 16):** **4/4 Server Audit Tests PASS + 4/4 Live Client–Server Security & UI Perf Tests PASS (100%)**:
+  - `[PASS]` Metrik Studio terukur: `466` BaseParts (`0` unanchored map), `12` PointLights, `6` ParticleEmitters, reuse `EventPill` tanpa alokasi ulang UI, caching lampu jalan `TimeService`.
+  - `[PASS]` Penolakan live remote atas bahan toko via peti gratis, `CFrame` invalid/`NaN`/terbang, `SafeZone NaN`, `ServeCustomer` invalid, serta rate limiter `12 req/s`.
+- **Full Game QA & Regression Testing (PROMPT 17):** **20 Area Gameplay & Teknis Lulus Verifikasi Studio Play Mode**:
+  - `[PASS]` Client–Server Live E2E (`01`–`19`), Audio/Animasi R15 `AnimationConstraint` (0 error Console), Satpol scheduler isolation, Data Persistence round-trip & migrasi `v0`→`v2`, serta UI PC (`1094x561` `Overlaps=0`) & simulasi mobile (`844x390` `Mobile844x390Fit=true`).
+  - `[FIXED]` `BUG-001`..`BUG-006` (animasi `RightShoulder.C0` R15, race condition scheduler `SatpolService` vs `EventService`, overlap HUD `TopHeaderBar`/`ToastContainer`/`TutorialCard` + modal responsif, sinkronisasi `leaderstats` saat rejoin, pembersihan 9 objek dummy di `Place1.rbxl`).
+  - Dokumentasi lengkap: [docs/QA_TEST_PLAN.md](file:///c:/Users/HP/Downloads/gorengan-24-jam-roblox/docs/QA_TEST_PLAN.md), [docs/QA_TEST_REPORT.md](file:///c:/Users/HP/Downloads/gorengan-24-jam-roblox/docs/QA_TEST_REPORT.md), dan [docs/BUG_TRACKER.md](file:///c:/Users/HP/Downloads/gorengan-24-jam-roblox/docs/BUG_TRACKER.md).
 
-## 3. Langkah Konkret Selanjutnya (Release & QA Akhir)
-1. Publish `Place1.rbxl` ke Roblox dan aktifkan *Studio Access to API Services* untuk verifikasi live cloud `DataStoreService`.
-2. Uji *Local Server & Multiple Clients* (2+ jendela pemain) dan uji kontrol sentuh perangkat mobile nyata sebelum beta publik.
+## 3. Langkah Konkret Selanjutnya (Release & Private Beta)
+1. Publish `Place1.rbxl` ke Roblox (Private) dan aktifkan *Studio Access to API Services* untuk verifikasi live cloud `DataStoreService`.
+2. Uji *Roblox Studio Local Server (2+ Players)* dan perangkat mobile fisik nyata untuk verifikasi sentuhan & replikasi multiplayer lintas klien sebelum rilis publik.

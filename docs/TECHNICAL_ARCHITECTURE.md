@@ -186,3 +186,14 @@ export type PlayerProfile = {
 }
 ```
 Strategi penyimpanan menggunakan `UpdateAsync` dengan validasi session locking saat pemain bergabung dan keluar.
+
+---
+
+## 8. Pemetaan Modul Aktual (Implementasi Akhir Fase 1–5)
+
+Struktur file final pada repositori (`src/`) mencakup:
+- **Entrypoint:** `src/server/init.server.luau` dan `src/client/init.client.luau` dengan `ServiceRunner` (`Init -> Start`).
+- **17 Server Services (`src/server/Services/`):** `CartService`, `ChiliService`, `CookingService`, `CustomerService`, `DataService`, `EconomyService`, `EventService`, `GameService`, `InventoryService`, `MapService`, `NetworkService`, `ProgressionService`, `SatpolService`, `SocialService`, `ThrowableService`, `TimeService`, `TutorialService`.
+- **16 Client Controllers (`src/client/Controllers/`):** `AudioVFXController`, `CartController`, `ChiliController`, `CookingController`, `CustomerUIController`, `GameController`, `HUDController`, `InventoryController`, `NetworkController`, `ProgressionController`, `RaidController`, `ShopUIController`, `SocialController`, `ThrowableController`, `TimeAndEventController`, `TutorialController`.
+- **10 Konfigurasi Terpusat (`src/shared/Config/`):** `ChiliGachaConfig`, `CustomerConfig`, `DataConfig`, `EconomyConfig`, `EventsConfig`, `GameConfig`, `ProgressionConfig`, `RecipesConfig`, `TimeScheduleConfig`, `UpgradesConfig`.
+- **Skema Persistensi Aktual (`DataService.luau` — Schema v2):** `Economy`, `Inventory`, `Upgrades`, `Progression` (Level/XP/UnlockedRecipes/Tutorial), `ChiliCollection`, `Stats`, dan `Meta` (`SaveCount`, `SessionLock`).

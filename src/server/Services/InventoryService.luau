@@ -49,16 +49,29 @@ function InventoryService:Init()
         self:_setupPlayerInventory(player)
     end
 
-    -- Daftarkan handler permintaan pengambilan bahan dari kotak gerobak
+    -- Daftarkan handler permintaan pengambilan bahan pokok dari kotak gerobak (HANYA batter/veggies)
     NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestTakeIngredients, function(player: Player, ingredientType: any, amount: any)
         if ingredientType ~= nil and (typeof(ingredientType) ~= "string" or #ingredientType > 32) then
             return { Success = false, Error = "Jenis bahan tidak valid!" }
         end
-        if amount ~= nil and (typeof(amount) ~= "number" or amount ~= amount or amount <= 0 or amount > 20 or math.floor(amount) ~= amount) then
+        local safeType = ingredientType or "batter"
+        if safeType ~= "batter" and safeType ~= "veggies" then
+            log:Warn("SECURITY: Pemain %s mencoba mengambil bahan berbayar '%s' lewat kotak gerobak!", player.Name, tostring(safeType))
+            return { Success = false, Error = "Bahan spesial ini hanya dapat dibeli di Toko Bahan Baku!" }
+        end
+        if amount ~= nil and (typeof(amount) ~= "number" or amount ~= amount or amount <= 0 or amount > 10 or math.floor(amount) ~= amount) then
             return { Success = false, Error = "Jumlah bahan tidak valid!" }
         end
 
         local parent = script and script.Parent
+        local throwMod = if parent then parent:FindFirstChild("ThrowableService") else nil
+        if throwMod then
+            local ts = require(throwMod)
+            if ts and ts.IsPlayerRagdolled and ts:IsPlayerRagdolled(player) then
+                return { Success = false, Error = "Tidak dapat mengambil bahan saat sempoyongan!" }
+            end
+        end
+
         local cartMod = if parent then parent:FindFirstChild("CartService") else nil
         if cartMod and player.Character then
             local cartService = require(cartMod)
@@ -69,7 +82,7 @@ function InventoryService:Init()
             end
         end
 
-        return self:HandleTakeIngredients(player, ingredientType, amount)
+        return self:HandleTakeIngredients(player, safeType, amount)
     end)
 
     -- Daftarkan handler permintaan inventaris
@@ -331,6 +344,10 @@ function InventoryService:ClearCookedFood(player: Player): number
     log:Warn("PENYITAAN SATPOL: Seluruh stok gorengan di etalase %s disita (%d porsi)!", player.Name, totalSeized)
     self:SyncInventory(player)
     return totalSeized
+end
+
+function InventoryService:GrantPurchasedIngredients(player: Player, ingredientType: string, amount: number): { Success: boolean, Error: string?, NewStock: number? }
+    return self:HandleTakeIngredients(player, ingredientType, amount)
 end
 
 function InventoryService:HandleTakeIngredients(player: Player, ingredientType: string?, amount: number?): { Success: boolean, Error: string?, NewStock: number? }

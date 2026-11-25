@@ -77,17 +77,23 @@ function TutorialController:_createTutorialGui()
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-    -- Kontainer kartu panduan (Tengah atas di bawah Header bar)
+    -- Kontainer kartu panduan (Tengah atas di bawah Header bar, responsif di mobile landscape)
     local card = Instance.new("Frame")
     card.Name = "TutorialCard"
-    card.Size = UDim2.new(0, 480, 0, 76)
-    card.Position = UDim2.new(0.5, -240, 0, 68)
+    card.AnchorPoint = Vector2.new(0.5, 0)
+    card.Size = UDim2.new(0.34, 0, 0, 76)
+    card.Position = UDim2.new(0.5, 0, 0, 68)
     card.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
     card.BackgroundTransparency = 0.1
     card.BorderSizePixel = 0
     card.Visible = false
     card.Parent = screenGui
     self._cardFrame = card
+
+    local cardConstraint = Instance.new("UISizeConstraint")
+    cardConstraint.MinSize = Vector2.new(280, 72)
+    cardConstraint.MaxSize = Vector2.new(460, 76)
+    cardConstraint.Parent = card
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 10)
@@ -101,12 +107,12 @@ function TutorialController:_createTutorialGui()
     -- Badge nomor langkah
     local badge = Instance.new("TextLabel")
     badge.Name = "StepBadge"
-    badge.Size = UDim2.new(0, 80, 0, 24)
-    badge.Position = UDim2.new(0, 12, 0, 8)
+    badge.Size = UDim2.new(0, 74, 0, 22)
+    badge.Position = UDim2.new(0, 10, 0, 8)
     badge.BackgroundColor3 = Color3.fromRGB(230, 155, 25)
     badge.TextColor3 = Color3.fromRGB(255, 255, 255)
     badge.Font = Enum.Font.FredokaOne
-    badge.TextSize = 12
+    badge.TextSize = 11
     badge.Text = "LANGKAH 1/5"
     badge.Parent = card
     self._stepBadge = badge
@@ -118,26 +124,31 @@ function TutorialController:_createTutorialGui()
     -- Judul Langkah
     local title = Instance.new("TextLabel")
     title.Name = "TitleLabel"
-    title.Size = UDim2.new(1, -190, 0, 24)
-    title.Position = UDim2.new(0, 98, 0, 8)
+    title.Size = UDim2.new(1, -162, 0, 22)
+    title.Position = UDim2.new(0, 88, 0, 8)
     title.BackgroundTransparency = 1
     title.TextColor3 = Color3.fromRGB(255, 230, 150)
     title.Font = Enum.Font.FredokaOne
     title.TextSize = 15
+    title.TextScaled = true
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Text = "Temukan Gerobakmu!"
     title.Parent = card
     self._titleLabel = title
 
+    local titleSizeCap = Instance.new("UITextSizeConstraint")
+    titleSizeCap.MaxTextSize = 15
+    titleSizeCap.Parent = title
+
     -- Deskripsi / Panduan Langkah
     local desc = Instance.new("TextLabel")
     desc.Name = "DescLabel"
-    desc.Size = UDim2.new(1, -24, 0, 36)
-    desc.Position = UDim2.new(0, 12, 0, 34)
+    desc.Size = UDim2.new(1, -20, 0, 38)
+    desc.Position = UDim2.new(0, 10, 0, 33)
     desc.BackgroundTransparency = 1
     desc.TextColor3 = Color3.fromRGB(220, 225, 235)
     desc.Font = Enum.Font.GothamMedium
-    desc.TextSize = 12
+    desc.TextSize = 11
     desc.TextWrapped = true
     desc.TextXAlignment = Enum.TextXAlignment.Left
     desc.TextYAlignment = Enum.TextYAlignment.Top
@@ -148,8 +159,8 @@ function TutorialController:_createTutorialGui()
     -- Tombol Lewati Tutorial
     local skipBtn = Instance.new("TextButton")
     skipBtn.Name = "SkipButton"
-    skipBtn.Size = UDim2.new(0, 70, 0, 22)
-    skipBtn.Position = UDim2.new(1, -80, 0, 9)
+    skipBtn.Size = UDim2.new(0, 64, 0, 22)
+    skipBtn.Position = UDim2.new(1, -72, 0, 8)
     skipBtn.BackgroundColor3 = Color3.fromRGB(60, 65, 75)
     skipBtn.TextColor3 = Color3.fromRGB(200, 205, 215)
     skipBtn.Font = Enum.Font.FredokaOne
@@ -176,7 +187,7 @@ function TutorialController:UpdateTutorialCard(currentStep: number, totalSteps: 
     if isFinished then
         self._isCompleted = true
         local tween = TweenService:Create(self._cardFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Position = UDim2.new(0.5, -240, 0, -100),
+            Position = UDim2.new(0.5, 0, 0, -100),
             BackgroundTransparency = 1,
         })
         tween:Play()
@@ -198,10 +209,10 @@ function TutorialController:UpdateTutorialCard(currentStep: number, totalSteps: 
         self._descLabel.Text = description
     end
 
-    -- Animasi transisi pergantian langkah
-    self._cardFrame.Position = UDim2.new(0.5, -240, 0, 55)
+    -- Animasi transisi pergantian langkah (tetap terpusat 0.5,0 agar bebas overlap di PC & mobile)
+    self._cardFrame.Position = UDim2.new(0.5, 0, 0, 55)
     TweenService:Create(self._cardFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, -240, 0, 68),
+        Position = UDim2.new(0.5, 0, 0, 68),
     }):Play()
 end
 

@@ -65,7 +65,10 @@ function CustomerService:Init()
     end)
 
     -- Daftarkan handler permintaan melayani pelanggan
-    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestServeCustomer, function(player: Player, customerId: string)
+    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestServeCustomer, function(player: Player, customerId: any)
+        if typeof(customerId) ~= "string" or #customerId == 0 or #customerId > 40 then
+            return { Success = false, Error = "ID pelanggan tidak valid!" }
+        end
         return self:HandleServeCustomer(player, customerId)
     end)
 end
@@ -645,13 +648,14 @@ function CustomerService:_setupActiveCustomerOrder(customerId: string, order: Cu
         -- Update visual bar kesabaran di atas kepala
         self:_updatePatienceBar(model, progress)
 
-        -- Dialogue ketika kesabaran menipis (< 25%)
+        -- Dialogue ketika kesabaran menipis (< 25%) — akses langsung tanpa pencarian rekursif
         if progress < 0.25 and #archetype.Dialogues.Impatient > 0 then
-            local impDialogue = archetype.Dialogues.Impatient[1]
-            local dLabel = model:FindFirstChild("OrderBubble", true)
-            if dLabel then
-                local txt = dLabel:FindFirstChild("DialogueText", true) :: TextLabel?
-                if txt then txt.Text = impDialogue end
+            local head = model:FindFirstChild("Head")
+            local bb = if head then head:FindFirstChild("OrderBubble") else nil
+            local bg = if bb then bb:FindFirstChild("BubbleFrame") else nil
+            local txt = if bg then bg:FindFirstChild("DialogueText") :: TextLabel? else nil
+            if txt then
+                txt.Text = archetype.Dialogues.Impatient[1]
             end
         end
     end
@@ -720,6 +724,10 @@ function CustomerService:_executeServe(player: Player, customerId: string, isAut
 
     local custHrp = model.PrimaryPart
     if not isAutoKasir then
+        local throwService = self:_getService("ThrowableService")
+        if throwService and throwService.IsPlayerRagdolled and throwService:IsPlayerRagdolled(player) then
+            return { Success = false, Error = "Kamu sedang sempoyongan dan belum bisa melayani!" }
+        end
         -- 2. Validasi jarak fisik pemain ke pelanggan (hanya untuk serve manual)
         local char = player.Character
         local hrp = if char then char:FindFirstChild("HumanoidRootPart") else nil

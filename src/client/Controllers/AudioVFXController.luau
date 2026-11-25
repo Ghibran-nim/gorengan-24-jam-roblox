@@ -62,6 +62,7 @@ local AudioVFXController = {
     _isPushing = false,
     _lastUiClick = 0,
     _hookedButtons = {} :: { [TextButton]: boolean },
+    _trackedNpcRigs = {} :: { [Model]: boolean },
 }
 
 function AudioVFXController:Init()
@@ -206,22 +207,58 @@ function AudioVFXController:_tweenRightArmPose(offsetCFrame: CFrame, duration: n
     local char = Players.LocalPlayer.Character
     if not char then return end
     local rUpper = char:FindFirstChild("RightUpperArm")
-    local shoulder = if rUpper then rUpper:FindFirstChild("RightShoulder") :: Motor6D? else nil
+    local shoulder = if rUpper then rUpper:FindFirstChild("RightShoulder") else nil
     local torso = char:FindFirstChild("Torso")
-    local r6Shoulder = if torso then torso:FindFirstChild("Right Shoulder") :: Motor6D? else nil
-    local motor = shoulder or r6Shoulder
-    if not motor then return end
+    local r6Shoulder = if torso then torso:FindFirstChild("Right Shoulder") else nil
+    local joint: Instance? = shoulder or r6Shoulder
+    if not joint then return end
 
-    local origC0 = motor.C0
-    local tw = TweenService:Create(motor, TweenInfo.new(duration * 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        C0 = origC0 * offsetCFrame,
-    })
-    tw:Play()
-    tw.Completed:Once(function()
-        if motor.Parent then
-            TweenService:Create(motor, TweenInfo.new(duration * 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-                C0 = origC0,
-            }):Play()
+    -- Dukung R6/R15 Motor6D (C0) maupun R15 AnimationConstraint (Attachment0.CFrame)
+    local animTarget: any = nil
+    local propName = "C0"
+    if joint:IsA("Motor6D") then
+        animTarget = joint
+        propName = "C0"
+    elseif joint:IsA("AnimationConstraint") and joint.Attachment0 then
+        animTarget = joint.Attachment0
+        propName = "CFrame"
+    else
+        return
+    end
+
+    local baseAttr = animTarget:GetAttribute("GorenganBasePose")
+    local origPose: CFrame = if typeof(baseAttr) == "CFrame" then baseAttr else (animTarget :: any)[propName]
+    if baseAttr == nil then
+        animTarget:SetAttribute("GorenganBasePose", origPose)
+    end
+
+    local halfDur = math.max(0.08, duration * 0.5)
+    local targetPose = origPose * offsetCFrame
+    local animToken = (tonumber(animTarget:GetAttribute("GorenganArmToken")) or 0) + 1
+    animTarget:SetAttribute("GorenganArmToken", animToken)
+
+    task.spawn(function()
+        local targetTbl: any = animTarget
+        local t = 0
+        while t < halfDur and animTarget.Parent and animTarget:GetAttribute("GorenganArmToken") == animToken do
+            local dt = RunService.Heartbeat:Wait()
+            t += dt
+            local alpha = math.clamp(t / halfDur, 0, 1)
+            local eased = 1 - (1 - alpha) * (1 - alpha)
+            targetTbl[propName] = origPose:Lerp(targetPose, eased)
+        end
+
+        local tBack = 0
+        while tBack < halfDur and animTarget.Parent and animTarget:GetAttribute("GorenganArmToken") == animToken do
+            local dt = RunService.Heartbeat:Wait()
+            tBack += dt
+            local alpha = math.clamp(tBack / halfDur, 0, 1)
+            local eased = alpha * alpha
+            targetTbl[propName] = targetPose:Lerp(origPose, eased)
+        end
+
+        if animTarget.Parent and animTarget:GetAttribute("GorenganArmToken") == animToken then
+            targetTbl[propName] = origPose
         end
     end)
 end
@@ -398,9 +435,47 @@ local function animateNpcRig(model: Model, phase: number, isWalking: boolean)
 end
 
 function AudioVFXController:_bindNpcWalkLoop()
+    local function trackIfNpc(inst: Instance)
+        if inst:IsA("Model") and (string.sub(inst.Name, 1, 9) == "Customer_" or string.sub(inst.Name, 1, 7) == "Satpol_") then
+            self._trackedNpcRigs[inst] = true
+        end
+    end
+    local function untrackNpc(inst: Instance)
+        if inst:IsA("Model") then
+            self._trackedNpcRigs[inst] = nil
+        end
+    end
+
+    for _, child in Workspace:GetChildren() do
+        trackIfNpc(child)
+    end
+    Workspace.ChildAdded:Connect(trackIfNpc)
+    Workspace.ChildRemoved:Connect(untrackNpc)
+
+    local function watchSquad(squad: Instance)
+        for _, child in squad:GetChildren() do
+            trackIfNpc(child)
+        end
+        squad.ChildAdded:Connect(trackIfNpc)
+        squad.ChildRemoved:Connect(untrackNpc)
+    end
+    local existingSquad = Workspace:FindFirstChild("SatpolSquad")
+    if existingSquad then
+        watchSquad(existingSquad)
+    else
+        Workspace.ChildAdded:Connect(function(child)
+            if child.Name == "SatpolSquad" then
+                watchSquad(child)
+            end
+        end)
+    end
+
     local acc = 0
     local walkTime = 0
     RunService.RenderStepped:Connect(function(dt: number)
+        if next(self._trackedNpcRigs) == nil then
+            return
+        end
         acc += dt
         if acc < 0.05 then return end -- ~20Hz untuk performa mobile optimal
         walkTime += acc * 9.0
@@ -409,25 +484,15 @@ function AudioVFXController:_bindNpcWalkLoop()
         local cam = Workspace.CurrentCamera
         local camPos = if cam then cam.CFrame.Position else Vector3.zero
 
-        local function processModel(inst: Instance)
-            if not inst:IsA("Model") then return end
-            if string.sub(inst.Name, 1, 9) ~= "Customer_" and string.sub(inst.Name, 1, 7) ~= "Satpol_" then
-                return
+        for npcModel in pairs(self._trackedNpcRigs) do
+            if not npcModel.Parent then
+                self._trackedNpcRigs[npcModel] = nil
+                continue
             end
-            local hrp = inst.PrimaryPart
-            local hum = inst:FindFirstChildOfClass("Humanoid")
-            if not hrp or not hum then return end
-            if (hrp.Position - camPos).Magnitude > 95 then return end
-            animateNpcRig(inst, walkTime, hum.MoveDirection.Magnitude > 0.05)
-        end
-
-        for _, child in Workspace:GetChildren() do
-            processModel(child)
-        end
-        local squad = Workspace:FindFirstChild("SatpolSquad")
-        if squad then
-            for _, child in squad:GetChildren() do
-                processModel(child)
+            local hrp = npcModel.PrimaryPart
+            local hum = npcModel:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and (hrp.Position - camPos).Magnitude <= 95 then
+                animateNpcRig(npcModel, walkTime, hum.MoveDirection.Magnitude > 0.05)
             end
         end
     end)
@@ -444,6 +509,9 @@ function AudioVFXController:_bindPlayerButtonClicks()
             self._hookedButtons[inst] = true
             inst.MouseButton1Click:Connect(function()
                 self:PlayUIClick()
+            end)
+            inst.Destroying:Connect(function()
+                self._hookedButtons[inst] = nil
             end)
         end
     end
@@ -486,11 +554,17 @@ function AudioVFXController:_createSettingsUI()
     -- Modal Pengaturan Tengah
     local modal = Instance.new("Frame")
     modal.Name = "SettingsModal"
-    modal.Size = UDim2.new(0, 400, 0, 340)
-    modal.Position = UDim2.new(0.5, -200, 0.5, -170)
+    modal.AnchorPoint = Vector2.new(0.5, 0.5)
+    modal.Size = UDim2.fromScale(0.80, 0.82)
+    modal.Position = UDim2.fromScale(0.5, 0.5)
     modal.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
     modal.Visible = false
     modal.Parent = screenGui
+
+    local mConstraint = Instance.new("UISizeConstraint")
+    mConstraint.MinSize = Vector2.new(280, 240)
+    mConstraint.MaxSize = Vector2.new(400, 340)
+    mConstraint.Parent = modal
     Instance.new("UICorner", modal).CornerRadius = UDim.new(0, 14)
     local mStroke = Instance.new("UIStroke", modal)
     mStroke.Color = Color3.fromRGB(110, 165, 235)
@@ -527,10 +601,15 @@ function AudioVFXController:_createSettingsUI()
         self:_playOneShot(SOUNDS.UiOpen, 0.24, 1.0)
     end)
 
-    local list = Instance.new("Frame")
+    local list = Instance.new("ScrollingFrame")
+    list.Name = "SettingsList"
     list.Size = UDim2.new(1, -28, 1, -60)
     list.Position = UDim2.new(0, 14, 0, 48)
     list.BackgroundTransparency = 1
+    list.BorderSizePixel = 0
+    list.ScrollBarThickness = 4
+    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    list.CanvasSize = UDim2.new(0, 0, 0, 0)
     list.Parent = modal
     local layout = Instance.new("UIListLayout", list)
     layout.Padding = UDim.new(0, 8)

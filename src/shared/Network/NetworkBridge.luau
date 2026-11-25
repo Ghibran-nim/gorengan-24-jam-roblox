@@ -115,6 +115,27 @@ function NetworkBridge.ValidatePlayerDistance(player: Player, targetPosition: Ve
     return distance <= maxDist
 end
 
+function NetworkBridge.IsFiniteNumber(v: any): boolean
+    return typeof(v) == "number" and v == v and math.abs(v) < math.huge
+end
+
+function NetworkBridge.IsFiniteVector3(v: any): boolean
+    if typeof(v) ~= "Vector3" then
+        return false
+    end
+    return NetworkBridge.IsFiniteNumber(v.X) and NetworkBridge.IsFiniteNumber(v.Y) and NetworkBridge.IsFiniteNumber(v.Z)
+end
+
+function NetworkBridge.IsAuthorizedAdmin(player: Player): boolean
+    if typeof(player) ~= "Instance" or not player:IsA("Player") then
+        return false
+    end
+    if RunService:IsStudio() then
+        return true
+    end
+    return game.CreatorId > 0 and player.UserId == game.CreatorId
+end
+
 -- ============================================================================
 -- SERVER-SIDE API
 -- ============================================================================

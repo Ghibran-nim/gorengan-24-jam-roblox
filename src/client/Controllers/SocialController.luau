@@ -172,11 +172,17 @@ function SocialController:_createSocialHUD()
     -- 3. Modal Leaderboard Kompetisi Pendapatan
     local lbModal = Instance.new("Frame")
     lbModal.Name = "LeaderboardModal"
-    lbModal.Size = UDim2.new(0, 460, 0, 360)
-    lbModal.Position = UDim2.new(0.5, -230, 0.5, -180)
+    lbModal.AnchorPoint = Vector2.new(0.5, 0.5)
+    lbModal.Size = UDim2.fromScale(0.84, 0.82)
+    lbModal.Position = UDim2.fromScale(0.5, 0.5)
     lbModal.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
     lbModal.Visible = false
     lbModal.Parent = screenGui
+
+    local lbConstraint = Instance.new("UISizeConstraint")
+    lbConstraint.MinSize = Vector2.new(280, 240)
+    lbConstraint.MaxSize = Vector2.new(460, 360)
+    lbConstraint.Parent = lbModal
 
     local lbCorner = Instance.new("UICorner")
     lbCorner.CornerRadius = UDim.new(0, 14)
@@ -232,11 +238,17 @@ function SocialController:_createSocialHUD()
     -- 4. Modal Kunjungan & Pembelian Antargerobak
     local visitModal = Instance.new("Frame")
     visitModal.Name = "CartVisitModal"
-    visitModal.Size = UDim2.new(0, 420, 0, 350)
-    visitModal.Position = UDim2.new(0.5, -210, 0.5, -175)
+    visitModal.AnchorPoint = Vector2.new(0.5, 0.5)
+    visitModal.Size = UDim2.fromScale(0.82, 0.82)
+    visitModal.Position = UDim2.fromScale(0.5, 0.5)
     visitModal.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
     visitModal.Visible = false
     visitModal.Parent = screenGui
+
+    local vConstraint = Instance.new("UISizeConstraint")
+    vConstraint.MinSize = Vector2.new(280, 240)
+    vConstraint.MaxSize = Vector2.new(420, 350)
+    vConstraint.Parent = visitModal
 
     Instance.new("UICorner", visitModal).CornerRadius = UDim.new(0, 14)
     local vStroke = Instance.new("UIStroke", visitModal)

@@ -181,11 +181,17 @@ function ChiliController:_createModalGui()
 
     local modal = Instance.new("Frame")
     modal.Name = "ChiliModalContainer"
-    modal.Size = UDim2.new(0, 540, 0, 400)
-    modal.Position = UDim2.new(0.5, -270, 0.5, -200)
+    modal.AnchorPoint = Vector2.new(0.5, 0.5)
+    modal.Size = UDim2.fromScale(0.86, 0.84)
+    modal.Position = UDim2.fromScale(0.5, 0.5)
     modal.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
     modal.BorderSizePixel = 0
     modal.Parent = screenGui
+
+    local mConstraint = Instance.new("UISizeConstraint")
+    mConstraint.MinSize = Vector2.new(290, 260)
+    mConstraint.MaxSize = Vector2.new(540, 400)
+    mConstraint.Parent = modal
 
     local mCorner = Instance.new("UICorner")
     mCorner.CornerRadius = UDim.new(0, 14)

@@ -575,7 +575,25 @@ function CartService:StopPushCart(player: Player): { Success: boolean, IsPushing
     return { Success = true, IsPushing = false, Speed = NORMAL_WALK_SPEED }
 end
 
-function CartService:UpdateCartPosition(player: Player, newCFrame: CFrame): { Success: boolean, Error: string? }
+function CartService:UpdateCartPosition(player: Player, newCFrame: any): { Success: boolean, Error: string? }
+    if typeof(newCFrame) ~= "CFrame" then
+        return { Success = false, Error = "Payload posisi gerobak tidak valid!" }
+    end
+    local rawPos = newCFrame.Position
+    if not NetworkBridge.IsFiniteVector3(rawPos) then
+        return { Success = false, Error = "Koordinat gerobak tidak valid!" }
+    end
+
+    local serverFolder = script and script.Parent
+    local throwMod = if serverFolder then serverFolder:FindFirstChild("ThrowableService") else nil
+    if throwMod then
+        local throwService = require(throwMod)
+        if throwService and throwService.IsPlayerRagdolled and throwService:IsPlayerRagdolled(player) then
+            self:StopPushCart(player)
+            return { Success = false, Error = "Gerobak dilepas karena kamu terkena ragdoll!" }
+        end
+    end
+
     local pushData = self._pushingPlayers[player.UserId]
     if not pushData or not pushData.isPushing then
         return { Success = false, Error = "Pemain tidak sedang mendorong gerobak!" }
@@ -588,7 +606,7 @@ function CartService:UpdateCartPosition(player: Player, newCFrame: CFrame): { Su
 
     local now = os.clock()
     local dt = math.max(now - pushData.lastUpdateTime, 0.05)
-    local targetPos = newCFrame.Position
+    local targetPos = rawPos
     local deltaDist = (targetPos - pushData.lastPosition).Magnitude
 
     -- Validasi anti-speedhack (maksimal wajar baseSpeed * 1.6 dengan toleransi network latency)
@@ -608,14 +626,20 @@ function CartService:UpdateCartPosition(player: Player, newCFrame: CFrame): { Su
         end
     end
 
-    -- Validasi batas ketinggian (mencegah teleport ke void / langit)
-    if targetPos.Y < -5 or targetPos.Y > 40 then
+    -- Validasi batas ketinggian & kunci orientasi datar agar gerobak tidak dapat dibalikkan/teleport
+    if targetPos.Y < -2 or targetPos.Y > 15 then
         return { Success = false, Error = "Ketinggian gerobak tidak wajar!" }
     end
 
+    local _, yaw, _ = newCFrame:ToEulerAnglesYXZ()
+    if not NetworkBridge.IsFiniteNumber(yaw) then
+        return { Success = false, Error = "Orientasi gerobak tidak valid!" }
+    end
+    local safeCFrame = CFrame.new(targetPos.X, math.clamp(targetPos.Y, 1.5, 6.0), targetPos.Z) * CFrame.Angles(0, yaw, 0)
+
     -- Otoritatif update posisi gerobak
-    cart:PivotTo(newCFrame)
-    pushData.lastPosition = targetPos
+    cart:PivotTo(safeCFrame)
+    pushData.lastPosition = safeCFrame.Position
     pushData.lastUpdateTime = now
 
     return { Success = true }

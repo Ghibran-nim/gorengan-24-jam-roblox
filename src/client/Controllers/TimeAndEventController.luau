@@ -44,6 +44,7 @@ local TimeAndEventController = {
         DayCount = 1,
     } :: TimeState,
     _activeEvents = {} :: { [string]: { Name: string, Icon: string, EndsAt: number, Color: Color3 } },
+    _eventPills = {} :: { [string]: { Frame: Frame, Label: TextLabel, LastText: string } },
     _gui = nil :: ScreenGui?,
     _clockLabel = nil :: TextLabel?,
     _eventsContainer = nil :: Frame?,
@@ -191,37 +192,56 @@ end
 
 function TimeAndEventController:_refreshEventPills()
     if not self._eventsContainer then return end
-    for _, child in self._eventsContainer:GetChildren() do
-        if child:IsA("Frame") then
-            child:Destroy()
+
+    -- Hapus pil untuk event yang sudah berakhir
+    for eventId, pillData in pairs(self._eventPills) do
+        if not self._activeEvents[eventId] then
+            if pillData.Frame and pillData.Frame.Parent then
+                pillData.Frame:Destroy()
+            end
+            self._eventPills[eventId] = nil
         end
+    end
+
+    if next(self._activeEvents) == nil then
+        return
     end
 
     local now = os.clock()
     for eventId, info in pairs(self._activeEvents) do
         local rem = math.max(0, math.ceil(info.EndsAt - now))
-        local pill = Instance.new("Frame")
-        pill.Name = "EventPill_" .. eventId
-        pill.Size = UDim2.new(1, 0, 0, 30)
-        pill.BackgroundColor3 = info.Color
-        pill.BackgroundTransparency = 0.15
-        pill.BorderSizePixel = 0
-        pill.Parent = self._eventsContainer
+        local nextText = string.format("%s %s (%ds)", info.Icon, info.Name, rem)
+        local cached = self._eventPills[eventId]
 
-        local pc = Instance.new("UICorner")
-        pc.CornerRadius = UDim.new(0, 8)
-        pc.Parent = pill
+        if not cached or not cached.Frame.Parent then
+            local pill = Instance.new("Frame")
+            pill.Name = "EventPill_" .. eventId
+            pill.Size = UDim2.new(1, 0, 0, 30)
+            pill.BackgroundColor3 = info.Color
+            pill.BackgroundTransparency = 0.15
+            pill.BorderSizePixel = 0
+            pill.Parent = self._eventsContainer
 
-        local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -14, 1, 0)
-        lbl.Position = UDim2.new(0, 7, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.Font = Enum.Font.FredokaOne
-        lbl.TextSize = 12
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Text = string.format("%s %s (%ds)", info.Icon, info.Name, rem)
-        lbl.Parent = pill
+            local pc = Instance.new("UICorner")
+            pc.CornerRadius = UDim.new(0, 8)
+            pc.Parent = pill
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -14, 1, 0)
+            lbl.Position = UDim2.new(0, 7, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+            lbl.Font = Enum.Font.FredokaOne
+            lbl.TextSize = 12
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.Text = nextText
+            lbl.Parent = pill
+
+            self._eventPills[eventId] = { Frame = pill, Label = lbl, LastText = nextText }
+        elseif cached.LastText ~= nextText then
+            cached.Label.Text = nextText
+            cached.LastText = nextText
+        end
     end
 end
 

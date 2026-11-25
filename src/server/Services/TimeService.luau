@@ -35,6 +35,7 @@ local TimeService = {
     _lastLampsOn = false,
     _dayCount = 1,
     _running = false,
+    _cachedLampLights = {} :: { PointLight },
     _phaseChangedListeners = {} :: { (DayPhaseId) -> () },
 }
 
@@ -185,9 +186,20 @@ function TimeService:_setStreetLampsEnabled(enabled: boolean)
     local map = Workspace:FindFirstChild("Map")
     if not map then return end
 
-    for _, desc in map:GetDescendants() do
-        if desc:IsA("PointLight") and desc.Parent and desc.Parent.Name == "Bulb" then
-            desc.Enabled = enabled
+    if #self._cachedLampLights == 0 then
+        for _, desc in map:GetDescendants() do
+            if desc:IsA("PointLight") and desc.Parent and desc.Parent.Name == "Bulb" then
+                table.insert(self._cachedLampLights, desc)
+            end
+        end
+    end
+
+    for idx = #self._cachedLampLights, 1, -1 do
+        local light = self._cachedLampLights[idx]
+        if light and light.Parent then
+            light.Enabled = enabled
+        else
+            table.remove(self._cachedLampLights, idx)
         end
     end
 end

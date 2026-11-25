@@ -168,8 +168,12 @@ function SocialService:Init()
         return self:SendSocialReaction(player, targetUserId, reactionId)
     end)
 
-    -- 5. Remote: Pemicuan / Penghentian Event Kompetisi Server-Wide (Testing & Event)
-    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestTriggerCompetitionEvent, function(_player: Player, action: any)
+    -- 5. Remote: Pemicuan / Penghentian Event Kompetisi Server-Wide (Hanya Studio / Creator)
+    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestTriggerCompetitionEvent, function(player: Player, action: any)
+        if not NetworkBridge.IsAuthorizedAdmin(player) then
+            log:Warn("SECURITY: Pemain %s mencoba memicu RequestTriggerCompetitionEvent tanpa izin!", player.Name)
+            return { Success = false, Error = "Akses ditolak: perintah khusus admin/Studio!" }
+        end
         if action == "Start" then
             return self:StartCompetitionEvent()
         elseif action == "Stop" then

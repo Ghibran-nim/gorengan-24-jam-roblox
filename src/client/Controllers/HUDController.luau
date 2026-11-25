@@ -68,11 +68,11 @@ function HUDController:_createMainHUD()
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
     -- ========================================================================
-    -- 1. TOP HEADER BAR: MONEY & STATUS DISPLAY
+    -- 1. TOP HEADER BAR: MONEY & STATUS DISPLAY (Sejajar rapi 260px dengan StockBar)
     -- ========================================================================
     local topBar = Instance.new("Frame")
     topBar.Name = "TopHeaderBar"
-    topBar.Size = UDim2.new(0, 480, 0, 46)
+    topBar.Size = UDim2.new(0, 260, 0, 46)
     topBar.Position = UDim2.new(0, 16, 0, 14)
     topBar.BackgroundColor3 = Color3.fromRGB(22, 24, 28)
     topBar.BackgroundTransparency = 0.15
@@ -91,51 +91,57 @@ function HUDController:_createMainHUD()
     local topLayout = Instance.new("UIListLayout")
     topLayout.FillDirection = Enum.FillDirection.Horizontal
     topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    topLayout.Padding = UDim.new(0, 12)
+    topLayout.Padding = UDim.new(0, 4)
     topLayout.Parent = topBar
 
     local pad = Instance.new("UIPadding")
-    pad.PaddingLeft = UDim.new(0, 12)
-    pad.PaddingRight = UDim.new(0, 12)
+    pad.PaddingLeft = UDim.new(0, 8)
+    pad.PaddingRight = UDim.new(0, 8)
     pad.Parent = topBar
 
     -- Label Uang Kas
     local cash = Instance.new("TextLabel")
     cash.Name = "CashText"
-    cash.Size = UDim2.new(0, 150, 1, 0)
+    cash.Size = UDim2.new(0.38, 0, 1, 0)
     cash.BackgroundTransparency = 1
     cash.TextColor3 = Color3.fromRGB(80, 240, 120)
     cash.Font = Enum.Font.FredokaOne
-    cash.TextSize = 15
+    cash.TextSize = 13
+    cash.TextScaled = true
     cash.TextXAlignment = Enum.TextXAlignment.Left
     cash.Text = "💵 Kas: Rp 0"
     cash.Parent = topBar
+    local cashCap = Instance.new("UITextSizeConstraint"); cashCap.MaxTextSize = 13; cashCap.Parent = cash
     self._cashLabel = cash
 
     -- Label Saldo Bank
     local bank = Instance.new("TextLabel")
     bank.Name = "BankText"
-    bank.Size = UDim2.new(0, 150, 1, 0)
+    bank.Size = UDim2.new(0.36, 0, 1, 0)
     bank.BackgroundTransparency = 1
     bank.TextColor3 = Color3.fromRGB(80, 180, 255)
     bank.Font = Enum.Font.FredokaOne
-    bank.TextSize = 15
+    bank.TextSize = 13
+    bank.TextScaled = true
     bank.TextXAlignment = Enum.TextXAlignment.Left
     bank.Text = "🏦 Bank: Rp 0"
     bank.Parent = topBar
+    local bankCap = Instance.new("UITextSizeConstraint"); bankCap.MaxTextSize = 13; bankCap.Parent = bank
     self._bankLabel = bank
 
     -- Label Reputasi
     local rep = Instance.new("TextLabel")
     rep.Name = "RepText"
-    rep.Size = UDim2.new(0, 120, 1, 0)
+    rep.Size = UDim2.new(0.22, 0, 1, 0)
     rep.BackgroundTransparency = 1
     rep.TextColor3 = Color3.fromRGB(245, 195, 45)
     rep.Font = Enum.Font.FredokaOne
-    rep.TextSize = 15
+    rep.TextSize = 13
+    rep.TextScaled = true
     rep.TextXAlignment = Enum.TextXAlignment.Left
     rep.Text = "🌟 Rep: 100"
     rep.Parent = topBar
+    local repCap = Instance.new("UITextSizeConstraint"); repCap.MaxTextSize = 13; repCap.Parent = rep
     self._repLabel = rep
 
     -- ========================================================================
@@ -202,10 +208,17 @@ function HUDController:_createMainHUD()
     -- ========================================================================
     local toastFrame = Instance.new("Frame")
     toastFrame.Name = "ToastContainer"
-    toastFrame.Size = UDim2.new(0, 440, 0, 50)
-    toastFrame.Position = UDim2.new(0.5, -220, 0, 14)
+    toastFrame.AnchorPoint = Vector2.new(0.5, 0)
+    toastFrame.Size = UDim2.new(0.34, 0, 0, 48)
+    toastFrame.Position = UDim2.new(0.5, 0, 0, 14)
     toastFrame.BackgroundTransparency = 1
     toastFrame.Parent = screenGui
+
+    local toastConstraint = Instance.new("UISizeConstraint")
+    toastConstraint.MinSize = Vector2.new(270, 44)
+    toastConstraint.MaxSize = Vector2.new(440, 50)
+    toastConstraint.Parent = toastFrame
+
     self._toastContainer = toastFrame
 
     self._gui = screenGui

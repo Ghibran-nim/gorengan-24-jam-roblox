@@ -324,15 +324,27 @@ function SatpolService:Init()
     -- Daftarkan folder squad di Workspace
     self:_getSquadFolder()
 
-    -- Registrasi RemoteFunction untuk pemicuan manual / pengujian razia
-    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestForceRaidEvent, function(player: Player, state: string)
+    -- Registrasi RemoteFunction untuk pemicuan manual / pengujian razia (Hanya Studio / Creator)
+    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestForceRaidEvent, function(player: Player, state: any)
+        if not NetworkBridge.IsAuthorizedAdmin(player) then
+            log:Warn("SECURITY: Pemain %s mencoba memicu RequestForceRaidEvent tanpa izin!", player.Name)
+            return { Success = false, State = self._currentRaidState, Error = "Akses ditolak: perintah khusus admin/Studio!" }
+        end
+        if typeof(state) ~= "string" or #state > 20 then
+            return { Success = false, State = self._currentRaidState, Error = "Status razia tidak valid!" }
+        end
         return self:ForceRaidEvent(player, state)
     end)
 
     -- Registrasi RemoteFunction untuk pengecekan status Safe Zone
-    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestCheckSafeZone, function(player: Player, checkPosition: Vector3?)
-        local pos = checkPosition
-        if not pos then
+    NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestCheckSafeZone, function(player: Player, checkPosition: any)
+        local pos: Vector3
+        if checkPosition ~= nil then
+            if not NetworkBridge.IsFiniteVector3(checkPosition) then
+                return { Success = false, Error = "Posisi tidak valid!" }
+            end
+            pos = checkPosition :: Vector3
+        else
             local cartPos = if self._services.CartService then self._services.CartService:GetCartPosition(player) else nil
             pos = cartPos or (player.Character and player.Character:GetPivot().Position) or Vector3.zero
         end
@@ -737,17 +749,26 @@ function SatpolService:_runRaidScheduler()
         local cooldown = RAID_INTERVAL
         log:Info("Jadwal razia: Periode tenang dimulai (%d detik hingga razia berikutnya).", cooldown)
 
+        local interrupted = false
         local elapsed = 0
         while elapsed < cooldown and self._raidLoopActive do
             task.wait(1)
             elapsed += 1
             if self._currentRaidState ~= "Idle" then
-                -- Interupsi manual (misalnya ForceRaidEvent)
+                -- Interupsi eksternal (EventService / ForceRaidEvent): biarkan pengendali eksternal menuntaskan siklusnya
+                interrupted = true
                 break
             end
         end
 
         if not self._raidLoopActive then break end
+
+        if interrupted then
+            while self._currentRaidState ~= "Idle" and self._raidLoopActive do
+                task.wait(1)
+            end
+            continue
+        end
 
         -- 2. Periode Peringatan 15 Detik (Kentongan & Sirine)
         if self._currentRaidState == "Idle" then
