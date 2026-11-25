@@ -19,6 +19,7 @@ local NetworkBridge = require(Shared:WaitForChild("Network"):WaitForChild("Netwo
 local Remotes = require(Shared:WaitForChild("Network"):WaitForChild("Remotes"))
 local EconomyConfig = require(Shared:WaitForChild("Config"):WaitForChild("EconomyConfig"))
 local UpgradesConfig = require(Shared:WaitForChild("Config"):WaitForChild("UpgradesConfig"))
+local RecipesConfig = require(Shared:WaitForChild("Config"):WaitForChild("RecipesConfig"))
 local GameplayTypes = require(Shared:WaitForChild("Types"):WaitForChild("GameplayTypes"))
 
 type Controller = GameplayTypes.Controller
@@ -52,9 +53,9 @@ function ShopUIController:Init()
         elseif prompt.Name == "UpgradeShopPrompt" then
             self:OpenUpgradeModal()
         elseif prompt.Name == "ChiliShopPrompt" then
-            local HUDController = require(script.Parent:WaitForChild("HUDController"))
-            if HUDController and (HUDController :: any).ShowToastNotification then
-                (HUDController :: any):ShowToastNotification("🌶️ Kios Cabai Gacha: Beli bibit & cabai rawit pedas!", "Success")
+            local ChiliController = require(script.Parent:WaitForChild("ChiliController"))
+            if ChiliController and (ChiliController :: any).OpenModal then
+                (ChiliController :: any):OpenModal("Gacha")
             end
         end
     end)
@@ -83,6 +84,7 @@ function ShopUIController:_createModalContainer()
     screenGui.Name = "ModalsHUD"
     screenGui.ResetOnSpawn = false
     screenGui.Enabled = false
+    screenGui.DisplayOrder = 12
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
     -- Backdrop gelap semi-transparan
@@ -98,14 +100,20 @@ function ShopUIController:_createModalContainer()
         self:CloseAllModals()
     end)
 
-    -- Container Modal Tengah (Ukuran responsif 480 x 360 pixel)
+    -- Container Modal Tengah Responsif (PC & Mobile auto-fit)
     local container = Instance.new("Frame")
     container.Name = "ModalWindow"
-    container.Size = UDim2.new(0, 480, 0, 360)
-    container.Position = UDim2.new(0.5, -240, 0.5, -180)
+    container.AnchorPoint = Vector2.new(0.5, 0.5)
+    container.Size = UDim2.new(0.92, 0, 0.84, 0)
+    container.Position = UDim2.fromScale(0.5, 0.5)
     container.BackgroundColor3 = Color3.fromRGB(25, 27, 32)
     container.BorderSizePixel = 0
     container.Parent = screenGui
+
+    local sizeConstraint = Instance.new("UISizeConstraint")
+    sizeConstraint.MaxSize = Vector2.new(480, 360)
+    sizeConstraint.MinSize = Vector2.new(300, 260)
+    sizeConstraint.Parent = container
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 14)
@@ -185,7 +193,7 @@ function ShopUIController:OpenIngredientShopModal()
     scroll.Position = UDim2.new(0, 12, 0, 46)
     scroll.BackgroundTransparency = 1
     scroll.ScrollBarThickness = 6
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 420)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 560)
     scroll.Parent = container
 
     local layout = Instance.new("UIListLayout")
@@ -255,17 +263,29 @@ function ShopUIController:OpenIngredientShopModal()
     end
 end
 
+function ShopUIController:_playTxFeedback(ok: boolean)
+    local audioMod = script.Parent:FindFirstChild("AudioVFXController")
+    if audioMod then
+        local audioCtrl = require(audioMod)
+        if audioCtrl and (audioCtrl :: any).PlayTransactionSound then
+            (audioCtrl :: any):PlayTransactionSound(ok)
+        end
+    end
+end
+
 function ShopUIController:RequestBuyPack(packId: string)
     log:Info("Client meminta membeli paket bahan: %s", packId)
     local res = NetworkBridge.InvokeServer(Remotes.Functions.RequestBuyIngredient, packId)
 
     local HUDController = require(script.Parent:WaitForChild("HUDController"))
     if res and res.Success then
+        self:_playTxFeedback(true)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("🛒 Pembelian Berhasil: " .. (res.PackName or packId), "Success")
         end
         self:OpenIngredientShopModal() -- Refresh UI setelah beli
     else
+        self:_playTxFeedback(false)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("⚠️ " .. (res and res.Error or "Gagal membeli bahan!"), "Warning")
         end
@@ -415,11 +435,13 @@ function ShopUIController:RequestDeposit(amount: number)
     local res = NetworkBridge.InvokeServer(Remotes.Functions.RequestDepositATM, amount)
     local HUDController = require(script.Parent:WaitForChild("HUDController"))
     if res and res.Success then
+        self:_playTxFeedback(true)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification(string.format("🏦 Berhasil setor Rp %d ke tabungan aman!", amount), "Success")
         end
         self:OpenATMModal()
     else
+        self:_playTxFeedback(false)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("⚠️ " .. (res and res.Error or "Gagal setor ATM!"), "Warning")
         end
@@ -430,11 +452,13 @@ function ShopUIController:RequestWithdraw(amount: number)
     local res = NetworkBridge.InvokeServer(Remotes.Functions.RequestWithdrawATM, amount)
     local HUDController = require(script.Parent:WaitForChild("HUDController"))
     if res and res.Success then
+        self:_playTxFeedback(true)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification(string.format("💵 Berhasil menarik Rp %d ke uang kas!", amount), "Success")
         end
         self:OpenATMModal()
     else
+        self:_playTxFeedback(false)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("⚠️ " .. (res and res.Error or "Gagal tarik ATM!"), "Warning")
         end
@@ -479,9 +503,15 @@ function ShopUIController:OpenUpgradeModal()
     local currentCash = if HUDController then (HUDController :: any):GetCarriedCash() else 0
 
     local upgrades = UpgradesConfig.GetAllUpgrades()
+    scroll.CanvasSize = UDim2.new(0, 0, 0, math.max(360, #upgrades * 72))
+
+    local progMod = script.Parent:FindFirstChild("ProgressionController")
+    local progCtrl = if progMod then require(progMod) else nil
+    local playerLevel = if progCtrl and (progCtrl :: any).GetLevel then (progCtrl :: any):GetLevel() else 1
+
     for _, upg in ipairs(upgrades) do
         local itemFrame = Instance.new("Frame")
-        itemFrame.Size = UDim2.new(1, -10, 0, 60)
+        itemFrame.Size = UDim2.new(1, -10, 0, 64)
         itemFrame.BackgroundColor3 = Color3.fromRGB(36, 40, 48)
         itemFrame.BorderSizePixel = 0
         itemFrame.Parent = scroll
@@ -490,22 +520,31 @@ function ShopUIController:OpenUpgradeModal()
         itemCorner.CornerRadius = UDim.new(0, 8)
         itemCorner.Parent = itemFrame
 
+        local reqLv = upg.RequiredLevel or 1
+        local prereqMissing = upg.PrerequisiteId and (not self._ownedUpgrades[upg.PrerequisiteId])
+        local prereqName = ""
+        if prereqMissing and upg.PrerequisiteId then
+            local pr = UpgradesConfig.GetUpgrade(upg.PrerequisiteId)
+            prereqName = if pr then pr.Name else upg.PrerequisiteId
+        end
+
         local descLabel = Instance.new("TextLabel")
         descLabel.Size = UDim2.new(0.68, 0, 1, 0)
         descLabel.Position = UDim2.new(0, 12, 0, 0)
         descLabel.BackgroundTransparency = 1
         descLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
         descLabel.Font = Enum.Font.FredokaOne
-        descLabel.TextSize = 13
+        descLabel.TextSize = 12
+        descLabel.TextWrapped = true
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
-        descLabel.Text = string.format("⚡ %s (Rp %d)\n%s", upg.Name, upg.Cost, upg.Description)
+        descLabel.Text = string.format("[%s | Lv.%d] %s (Rp %d)\n%s", upg.Category, reqLv, upg.Name, upg.Cost, upg.Description)
         descLabel.Parent = itemFrame
 
         local actionBtn = Instance.new("TextButton")
-        actionBtn.Size = UDim2.new(0, 110, 0, 36)
-        actionBtn.Position = UDim2.new(1, -120, 0.5, -18)
+        actionBtn.Size = UDim2.new(0, 114, 0, 38)
+        actionBtn.Position = UDim2.new(1, -124, 0.5, -19)
         actionBtn.Font = Enum.Font.FredokaOne
-        actionBtn.TextSize = 13
+        actionBtn.TextSize = 12
         actionBtn.Parent = itemFrame
 
         local btnCorner = Instance.new("UICorner")
@@ -516,7 +555,18 @@ function ShopUIController:OpenUpgradeModal()
         if isOwned then
             actionBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 50)
             actionBtn.TextColor3 = Color3.fromRGB(180, 240, 190)
-            actionBtn.Text = "TERPASANG"
+            actionBtn.Text = "✅ TERPASANG"
+        elseif playerLevel < reqLv then
+            actionBtn.BackgroundColor3 = Color3.fromRGB(55, 58, 66)
+            actionBtn.TextColor3 = Color3.fromRGB(170, 175, 185)
+            actionBtn.Text = "🔒 BUTUH LV." .. tostring(reqLv)
+        elseif prereqMissing then
+            actionBtn.BackgroundColor3 = Color3.fromRGB(70, 60, 55)
+            actionBtn.TextColor3 = Color3.fromRGB(220, 180, 130)
+            actionBtn.Text = "🔒 PRASYARAT"
+            actionBtn.MouseButton1Click:Connect(function()
+                self:RequestBuyUpgrade(upg.Id)
+            end)
         elseif currentCash >= upg.Cost then
             actionBtn.BackgroundColor3 = Color3.fromRGB(210, 140, 30)
             actionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -536,11 +586,13 @@ function ShopUIController:RequestBuyUpgrade(upgradeId: string)
     local res = NetworkBridge.InvokeServer(Remotes.Functions.RequestBuyUpgrade, upgradeId)
     local HUDController = require(script.Parent:WaitForChild("HUDController"))
     if res and res.Success then
+        self:_playTxFeedback(true)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("🔧 Upgrade Terpasang: " .. (res.UpgradeName or upgradeId), "Success")
         end
         self:OpenUpgradeModal()
     else
+        self:_playTxFeedback(false)
         if HUDController and (HUDController :: any).ShowToastNotification then
             (HUDController :: any):ShowToastNotification("⚠️ " .. (res and res.Error or "Gagal membeli upgrade!"), "Warning")
         end
@@ -603,7 +655,10 @@ function ShopUIController:OpenInventoryModal()
         { name = "Tahu Pong", icon = "🧈", id = "tofu" },
         { name = "Tempe Mendoan", icon = "🥢", id = "tempeh" },
         { name = "Tepung Tapioka", icon = "🥣", id = "acitapioca" },
+        { name = "Telur Kampung", icon = "🥚", id = "egg" },
+        { name = "Kulit & Mayo", icon = "🌯", id = "risol_skin" },
     }
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 520)
 
     for _, itm in ipairs(itemsList) do
         local count = ingredients[itm.id] or 0
@@ -652,7 +707,7 @@ function ShopUIController:OpenInventoryModal()
             c.Parent = f
 
             local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -16, 1, 0)
+            lbl.Size = UDim2.new(1, -136, 1, 0)
             lbl.Position = UDim2.new(0, 8, 0, 0)
             lbl.BackgroundTransparency = 1
             lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -661,6 +716,155 @@ function ShopUIController:OpenInventoryModal()
             lbl.TextXAlignment = Enum.TextXAlignment.Left
             lbl.Text = string.format("🍽️ %s : 🌟 %d Crispy | ⚠️ %d Mentah | 🔥 %d Gosong", recipeId:upper(), counts.Crispy or 0, counts.Undercooked or 0, counts.Burnt or 0)
             lbl.Parent = f
+
+            if (counts.Burnt or 0) > 0 then
+                local equipBtn = Instance.new("TextButton")
+                equipBtn.Size = UDim2.new(0, 118, 0, 24)
+                equipBtn.Position = UDim2.new(1, -124, 0.5, -12)
+                equipBtn.BackgroundColor3 = Color3.fromRGB(185, 50, 35)
+                equipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                equipBtn.Font = Enum.Font.FredokaOne
+                equipBtn.TextSize = 11
+                equipBtn.Text = "🔥 Ambil Gosong"
+                equipBtn.Parent = f
+                local ec = Instance.new("UICorner")
+                ec.CornerRadius = UDim.new(0, 6)
+                ec.Parent = equipBtn
+
+                equipBtn.MouseButton1Click:Connect(function()
+                    self:CloseAllModals()
+                    local ThrowableController = require(script.Parent:WaitForChild("ThrowableController"))
+                    if ThrowableController and (ThrowableController :: any).ToggleEquipBurntFood then
+                        (ThrowableController :: any):ToggleEquipBurntFood(recipeId)
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- ============================================================================
+-- MODAL 5: BUKU RESEP & PROGRESSION MENU GORENGAN
+-- ============================================================================
+
+function ShopUIController:OpenRecipesModal()
+    self:CloseAllModals()
+    if not self._gui or not self._modalContainer then return end
+
+    local container = self._modalContainer
+    self._gui.Enabled = true
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -60, 0, 36)
+    title.Position = UDim2.new(0, 16, 0, 8)
+    title.BackgroundTransparency = 1
+    title.TextColor3 = Color3.fromRGB(245, 185, 65)
+    title.Font = Enum.Font.FredokaOne
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Text = "📖 BUKU RESEP & PROGRESSION MENU"
+    title.Parent = container
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -24, 1, -54)
+    scroll.Position = UDim2.new(0, 12, 0, 46)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 6
+    scroll.Parent = container
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 8)
+    layout.Parent = scroll
+
+    local HUDController = require(script.Parent:WaitForChild("HUDController"))
+    local currentCash = if HUDController then (HUDController :: any):GetCarriedCash() else 0
+
+    local progMod = script.Parent:FindFirstChild("ProgressionController")
+    local progCtrl = if progMod then require(progMod) else nil
+    local playerLevel = if progCtrl and (progCtrl :: any).GetLevel then (progCtrl :: any):GetLevel() else 1
+    local selectedId = if progCtrl and (progCtrl :: any).GetSelectedRecipeId then (progCtrl :: any):GetSelectedRecipeId() else "bakwan_sayur"
+
+    local recipes = RecipesConfig.GetAllRecipes()
+    scroll.CanvasSize = UDim2.new(0, 0, 0, math.max(360, #recipes * 78))
+
+    for _, recipe in ipairs(recipes) do
+        local itemFrame = Instance.new("Frame")
+        itemFrame.Size = UDim2.new(1, -10, 0, 70)
+        itemFrame.BackgroundColor3 = Color3.fromRGB(36, 40, 48)
+        itemFrame.BorderSizePixel = 0
+        itemFrame.Parent = scroll
+
+        local itemCorner = Instance.new("UICorner")
+        itemCorner.CornerRadius = UDim.new(0, 8)
+        itemCorner.Parent = itemFrame
+
+        local ingParts = {}
+        for ingId, qty in pairs(recipe.RequiredIngredients) do
+            table.insert(ingParts, tostring(qty) .. "x " .. ingId)
+        end
+        table.sort(ingParts)
+
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Size = UDim2.new(0.68, 0, 1, 0)
+        descLabel.Position = UDim2.new(0, 12, 0, 0)
+        descLabel.BackgroundTransparency = 1
+        descLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        descLabel.Font = Enum.Font.FredokaOne
+        descLabel.TextSize = 12
+        descLabel.TextWrapped = true
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.Text = string.format(
+            "%s %s [%s | Lv.%d] — Jual: Rp %d (%.1fs)\nBahan: %s | %s",
+            recipe.Icon, recipe.Name, recipe.Difficulty, recipe.UnlockLevel, recipe.BasePrice, recipe.TotalCookDuration,
+            table.concat(ingParts, ", "), recipe.Description
+        )
+        descLabel.Parent = itemFrame
+
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, 118, 0, 40)
+        btn.Position = UDim2.new(1, -128, 0.5, -20)
+        btn.Font = Enum.Font.FredokaOne
+        btn.TextSize = 12
+        btn.Parent = itemFrame
+
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 6)
+        btnCorner.Parent = btn
+
+        local isUnlocked = if progCtrl and (progCtrl :: any).IsRecipeUnlocked then (progCtrl :: any):IsRecipeUnlocked(recipe.Id) else (recipe.Id == "bakwan_sayur")
+
+        if isUnlocked then
+            if selectedId == recipe.Id then
+                btn.BackgroundColor3 = Color3.fromRGB(40, 130, 65)
+                btn.TextColor3 = Color3.fromRGB(220, 255, 225)
+                btn.Text = "✅ DIPILIH"
+            else
+                btn.BackgroundColor3 = Color3.fromRGB(35, 110, 200)
+                btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                btn.Text = "🍳 PILIH MENU"
+                btn.MouseButton1Click:Connect(function()
+                    if progCtrl and (progCtrl :: any):SelectRecipe(recipe.Id) then
+                        self:OpenRecipesModal()
+                    end
+                end)
+            end
+        elseif playerLevel < recipe.UnlockLevel then
+            btn.BackgroundColor3 = Color3.fromRGB(55, 58, 66)
+            btn.TextColor3 = Color3.fromRGB(170, 175, 185)
+            btn.Text = "🔒 BUTUH LV." .. tostring(recipe.UnlockLevel)
+        elseif currentCash >= recipe.UnlockCost then
+            btn.BackgroundColor3 = Color3.fromRGB(220, 145, 30)
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Text = "🔓 BUKA\nRp " .. tostring(recipe.UnlockCost)
+            btn.MouseButton1Click:Connect(function()
+                if progCtrl and (progCtrl :: any):UnlockRecipe(recipe.Id) then
+                    self:OpenRecipesModal()
+                end
+            end)
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(65, 68, 74)
+            btn.TextColor3 = Color3.fromRGB(160, 165, 170)
+            btn.Text = "🔒 Rp " .. tostring(recipe.UnlockCost)
         end
     end
 end

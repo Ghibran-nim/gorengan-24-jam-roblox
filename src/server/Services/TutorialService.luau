@@ -76,10 +76,6 @@ function TutorialService:Init()
         self:_setupPlayerTutorial(player)
     end)
 
-    Players.PlayerRemoving:Connect(function(player: Player)
-        self._playerStates[player.UserId] = nil
-    end)
-
     for _, player in Players:GetPlayers() do
         self:_setupPlayerTutorial(player)
     end
@@ -113,6 +109,34 @@ function TutorialService:Start()
     self._services.GameService = require(Server:WaitForChild("GameService"))
     self._services.EconomyService = require(Server:WaitForChild("EconomyService"))
     self._services.InventoryService = require(Server:WaitForChild("InventoryService"))
+
+    local dataMod = Server:FindFirstChild("DataService")
+    if dataMod then
+        local dataService = require(dataMod)
+        self._services.DataService = dataService
+        dataService:RegisterDomain("Tutorial",
+            function(player: Player, profile: any)
+                local src = profile.Progression
+                self._playerStates[player.UserId] = {
+                    CurrentStep = src.TutorialStep or 1,
+                    IsCompleted = src.TutorialCompleted == true,
+                    IsSkipped = src.TutorialSkipped == true,
+                }
+                self:SyncTutorialState(player)
+            end,
+            function(player: Player, profile: any)
+                local st = self._playerStates[player.UserId]
+                if st then
+                    profile.Progression.TutorialStep = st.CurrentStep
+                    profile.Progression.TutorialCompleted = st.IsCompleted
+                    profile.Progression.TutorialSkipped = st.IsSkipped
+                end
+            end,
+            function(userId: number)
+                self._playerStates[userId] = nil
+            end
+        )
+    end
 
     log:Info("TutorialService aktif.")
 end
@@ -190,10 +214,16 @@ function TutorialService:ProgressStep(player: Player, expectedStep: number): boo
         end
 
         NetworkBridge.FireClient(player, Remotes.Events.NotificationFired, "🎉 SELAMAT! Kamu lulus tutorial dan mendapat bonus modal Rp 10.000!", "Crispy")
+        if self._services.DataService and self._services.DataService.MarkDirty then
+            self._services.DataService:MarkDirty(player, "TutorialCompleted")
+        end
         self:SyncTutorialState(player)
         return true
     else
         state.CurrentStep = nextStep
+        if self._services.DataService and self._services.DataService.MarkDirty then
+            self._services.DataService:MarkDirty(player, "TutorialStep")
+        end
         self:SyncTutorialState(player)
         return true
     end
@@ -208,6 +238,9 @@ function TutorialService:SkipTutorial(player: Player): { Success: boolean }
     state.IsSkipped = true
     state.IsCompleted = true
     state.CurrentStep = #TUTORIAL_STEPS + 1
+    if self._services.DataService and self._services.DataService.MarkDirty then
+        self._services.DataService:MarkDirty(player, "TutorialSkipped")
+    end
     self:SyncTutorialState(player)
     NetworkBridge.FireClient(player, Remotes.Events.NotificationFired, "Tutorial dilewati. Selamat berdagang secara mandiri!", "Info")
     return { Success = true }

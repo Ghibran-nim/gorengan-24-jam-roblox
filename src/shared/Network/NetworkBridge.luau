@@ -22,6 +22,12 @@ local remotesFolder: Folder
 -- Rate limiting data structures (Server-only)
 local playerRateLimits: { [number]: { count: number, resetTime: number } } = {}
 
+if isServer then
+    Players.PlayerRemoving:Connect(function(player: Player)
+        playerRateLimits[player.UserId] = nil
+    end)
+end
+
 local NetworkBridge = {}
 
 -- Inisialisasi folder remotes

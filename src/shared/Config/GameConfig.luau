@@ -47,6 +47,24 @@ local GameConfig = {
     -- Persentase pemotongan kas pedagang saat tertangkap razia (25%)
     SatpolPenaltyCashPercent = 0.25,
 
+    -- Pengaturan item lempar gorengan gosong (Throwable & Social Chaos)
+    BurntThrowCooldownSeconds = 3.5,
+    BurntThrowMaxDistance = 55,
+    BurntThrowProjectileSpeed = 65,
+    BurntThrowGravity = 38,
+    BurntThrowHitRadius = 3.2,
+    BurntRagdollDurationSeconds = 2.0,
+    BurntTargetImmunitySeconds = 8.0,
+    BurntSpawnProtectionSeconds = 5.0,
+    BurntPairHarassmentCooldownSeconds = 10.0,
+
+    -- Pengaturan Multiplayer, Interaksi Antargerobak & Kompetisi
+    SocialBuyCooldownSeconds = 2.0,
+    SocialReactionCooldownSeconds = 10.0,
+    CartNeighborBonusCash = 250,
+    LeaderboardBroadcastThrottleSeconds = 1.0,
+    CompetitionEventDurationSeconds = 45,
+
     -- Nama folder remote di ReplicatedStorage
     RemotesFolderName = "NetworkRemotes",
 

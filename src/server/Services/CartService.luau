@@ -18,6 +18,7 @@ local Logger = require(Shared:WaitForChild("Utility"):WaitForChild("Logger"))
 local NetworkBridge = require(Shared:WaitForChild("Network"):WaitForChild("NetworkBridge"))
 local Remotes = require(Shared:WaitForChild("Network"):WaitForChild("Remotes"))
 local GameConfig = require(Shared:WaitForChild("Config"):WaitForChild("GameConfig"))
+local ChiliGachaConfig = require(Shared:WaitForChild("Config"):WaitForChild("ChiliGachaConfig"))
 local GameplayTypes = require(Shared:WaitForChild("Types"):WaitForChild("GameplayTypes"))
 
 type Service = GameplayTypes.Service
@@ -115,6 +116,18 @@ function CartService:Start()
 end
 
 function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
+    -- Validasi konflik kepemilikan plot terhadap pemain lain
+    for otherUserId, otherPlotId in pairs(self._playerPlotIds) do
+        if otherPlotId == plotId and otherUserId ~= player.UserId then
+            local otherPlayer = Players:GetPlayerByUserId(otherUserId)
+            if otherPlayer and otherPlayer.Parent == Players then
+                error(string.format("Konflik plot #%d: masih dimiliki oleh %s!", plotId, otherPlayer.Name))
+            else
+                self._playerPlotIds[otherUserId] = nil
+            end
+        end
+    end
+
     self:DespawnPlayerCart(player)
 
     local map = Workspace:FindFirstChild("Map")
@@ -135,6 +148,8 @@ function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
 
     local cartModel = Instance.new("Model")
     cartModel.Name = "Gerobak_" .. player.Name
+    cartModel:SetAttribute("OwnerUserId", player.UserId)
+    cartModel:SetAttribute("PlotId", plotId)
 
     -- 1. Badan Gerobak (Kayu utama: 7 x 3.5 x 4.5 studs)
     local chassis = createPart(cartModel, "Chassis", Vector3.new(7, 3, 4.2), spawnCFrame * CFrame.new(0, 2, 0), CART_PALETTE.WoodChassis, Enum.Material.WoodPlanks, true)
@@ -168,11 +183,40 @@ function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
     local glassCase = createPart(cartModel, "EtalaseKaca", Vector3.new(3.2, 2.5, 3.8), spawnCFrame * CFrame.new(-1.6, 4.5, 0), CART_PALETTE.Glass, Enum.Material.Glass, true)
     glassCase.Transparency = 0.55
 
-    -- Rak kayu di dalam etalase
-    createPart(cartModel, "GlassShelf", Vector3.new(3.0, 0.2, 3.6), spawnCFrame * CFrame.new(-1.6, 4.2, 0), CART_PALETTE.WoodTrim, Enum.Material.Wood, false)
+    local takeBurntPrompt = Instance.new("ProximityPrompt")
+    takeBurntPrompt.Name = "TakeBurntPrompt"
+    takeBurntPrompt.ActionText = "Ambil Gorengan Gosong"
+    takeBurntPrompt.ObjectText = "Etalase Gerobak"
+    takeBurntPrompt.KeyboardKeyCode = Enum.KeyCode.R
+    takeBurntPrompt.HoldDuration = 0.2
+    takeBurntPrompt.MaxActivationDistance = 8
+    takeBurntPrompt.RequiresLineOfSight = false
+    takeBurntPrompt.Parent = glassCase
 
-    -- 3. Area Wajan & Kompor (di sisi kanan gerobak)
+    -- Interaksi Sosial Antargerobak (untuk pemain lain mengunjungi / membeli dari etalase)
+    local socialPrompt = Instance.new("ProximityPrompt")
+    socialPrompt.Name = "SocialVisitPrompt"
+    socialPrompt.ActionText = "Icip / Reaksi Gerobak"
+    socialPrompt.ObjectText = "Lapak " .. player.Name
+    socialPrompt.KeyboardKeyCode = Enum.KeyCode.V
+    socialPrompt.HoldDuration = 0.2
+    socialPrompt.MaxActivationDistance = 10
+    socialPrompt.RequiresLineOfSight = false
+    socialPrompt:SetAttribute("OwnerUserId", player.UserId)
+    socialPrompt.Parent = glassCase
+
+    -- Rak kayu di dalam etalase + sampel pajangan gorengan renyah
+    createPart(cartModel, "GlassShelf", Vector3.new(3.0, 0.2, 3.6), spawnCFrame * CFrame.new(-1.6, 4.2, 0), CART_PALETTE.WoodTrim, Enum.Material.Wood, false)
+    createPart(cartModel, "DisplayBakwan1", Vector3.new(0.85, 0.35, 0.85), spawnCFrame * CFrame.new(-1.2, 4.48, -0.7), CART_PALETTE.CrispyGold, Enum.Material.Concrete, false)
+    createPart(cartModel, "DisplayBakwan2", Vector3.new(0.85, 0.35, 0.85), spawnCFrame * CFrame.new(-2.0, 4.48, 0.5), CART_PALETTE.CrispyGold, Enum.Material.Concrete, false)
+
+    -- 3. Area Wajan & Kompor + Tabung Gas Melon 3kg & Botol Kecap/Sambal
     local stove = createPart(cartModel, "Kompor", Vector3.new(3.2, 0.6, 3.8), spawnCFrame * CFrame.new(1.6, 3.6, 0), Color3.fromRGB(60, 60, 65), Enum.Material.Metal, true)
+    local gasTank = createPart(cartModel, "TabungGasMelon", Vector3.new(1.2, 1.5, 1.2), spawnCFrame * CFrame.new(1.8, 1.35, 0), Color3.fromRGB(70, 175, 75), Enum.Material.Metal, false)
+    gasTank.Shape = Enum.PartType.Cylinder
+    gasTank.CFrame = spawnCFrame * CFrame.new(1.8, 1.35, 0) * CFrame.Angles(0, 0, math.rad(90))
+    createPart(cartModel, "BotolSambal", Vector3.new(0.35, 0.85, 0.35), spawnCFrame * CFrame.new(0.1, 3.9, -1.3), Color3.fromRGB(220, 45, 35), Enum.Material.SmoothPlastic, false)
+    createPart(cartModel, "BotolKecap", Vector3.new(0.35, 0.9, 0.35), spawnCFrame * CFrame.new(0.1, 3.92, -0.8), Color3.fromRGB(35, 22, 18), Enum.Material.SmoothPlastic, false)
 
     -- Wajan logam cekung
     local wajan = createPart(cartModel, "Wajan", Vector3.new(2.6, 0.5, 2.6), spawnCFrame * CFrame.new(1.6, 4.0, 0), CART_PALETTE.MetalWajan, Enum.Material.Metal, true)
@@ -194,6 +238,18 @@ function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
     sizzleEmitter.SpreadAngle = Vector2.new(25, 25)
     sizzleEmitter.Lifetime = NumberRange.new(0.4, 0.8)
     sizzleEmitter.Parent = foodVisual
+
+    -- Partikel kilau emas Crispy
+    local crispySparkles = Instance.new("ParticleEmitter")
+    crispySparkles.Name = "CrispySparkles"
+    crispySparkles.Color = ColorSequence.new(Color3.fromRGB(255, 230, 85))
+    crispySparkles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0.05) })
+    crispySparkles.Rate = 0
+    crispySparkles.Speed = NumberRange.new(1.5, 3)
+    crispySparkles.SpreadAngle = Vector2.new(35, 35)
+    crispySparkles.Lifetime = NumberRange.new(0.4, 0.7)
+    crispySparkles.LightEmission = 0.7
+    crispySparkles.Parent = foodVisual
 
     -- Partikel asap gosong (Smoke)
     local smokeEmitter = Instance.new("ParticleEmitter")
@@ -233,6 +289,8 @@ function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
     local roofPole3 = createPart(cartModel, "RoofPole3", Vector3.new(0.3, 3.5, 0.3), spawnCFrame * CFrame.new(-3.2, 5.0, -1.9), CART_PALETTE.MetalWajan, Enum.Material.Metal, false)
     local roofPole4 = createPart(cartModel, "RoofPole4", Vector3.new(0.3, 3.5, 0.3), spawnCFrame * CFrame.new(3.2, 5.0, -1.9), CART_PALETTE.MetalWajan, Enum.Material.Metal, false)
     local canopy = createPart(cartModel, "Canopy", Vector3.new(7.6, 0.4, 5.2), spawnCFrame * CFrame.new(0, 6.8, 0), CART_PALETTE.CanopyStripeGreen, Enum.Material.Fabric, false)
+    createPart(cartModel, "CanopyTrimFront", Vector3.new(7.65, 0.35, 0.25), spawnCFrame * CFrame.new(0, 6.55, 2.55), CART_PALETTE.CanopyStripeYellow, Enum.Material.Fabric, false)
+    createPart(cartModel, "CanopyTrimBack", Vector3.new(7.65, 0.35, 0.25), spawnCFrame * CFrame.new(0, 6.55, -2.55), CART_PALETTE.CanopyStripeYellow, Enum.Material.Fabric, false)
 
     -- 6. Papan Spanduk Gerobak
     local banner = createPart(cartModel, "CartBanner", Vector3.new(6.8, 1.2, 0.2), spawnCFrame * CFrame.new(0, 6.2, 2.5), CART_PALETTE.CanopyStripeYellow, Enum.Material.SmoothPlastic, false)
@@ -256,8 +314,132 @@ function CartService:SpawnPlayerCart(player: Player, plotId: number): Model
     self._playerCarts[player.UserId] = cartModel
     self._playerPlotIds[player.UserId] = plotId
 
+    -- Terapkan visual seluruh upgrade yang sudah dimiliki pemain
+    local ecoService = self:_getEconomyService()
+    if ecoService and ecoService._playerUpgrades and ecoService._playerUpgrades[player.UserId] then
+        for upgradeId, owned in pairs(ecoService._playerUpgrades[player.UserId]) do
+            if owned then
+                self:ApplyUpgradeVisuals(player, upgradeId)
+            end
+        end
+    end
+
+    -- Terapkan visual toples cabai langka jika pemain sudah memasangnya
+    local chiliMod = script and script.Parent and script.Parent:FindFirstChild("ChiliService")
+    if chiliMod then
+        local chiliService = require(chiliMod)
+        local equippedChili = if chiliService and chiliService.GetEquippedChili then chiliService:GetEquippedChili(player) else nil
+        if equippedChili then
+            self:ApplyChiliVisuals(player, equippedChili.Id)
+        end
+    end
+
     log:Info("Gerobak '%s' berhasil dimunculkan di plot #%d untuk pemain %s", cartModel.Name, plotId, player.Name)
     return cartModel
+end
+
+function CartService:UpdateCartCookPrompt(player: Player, recipeName: string)
+    local cart = self:GetPlayerCart(player)
+    if not cart then return end
+    local wajan = cart:FindFirstChild("Wajan")
+    local cookPrompt = if wajan then wajan:FindFirstChild("CookPrompt") else nil
+    if cookPrompt and cookPrompt:IsA("ProximityPrompt") then
+        cookPrompt.ActionText = "Goreng " .. recipeName
+    end
+end
+
+function CartService:ApplyUpgradeVisuals(player: Player, upgradeId: string)
+    local cart = self:GetPlayerCart(player)
+    if not cart then return end
+    local chassis = cart:FindFirstChild("Chassis") :: BasePart?
+    if not chassis then return end
+
+    if upgradeId == "wajan_jumbo" or upgradeId == "wajan_anti_lengket" then
+        local wajan = cart:FindFirstChild("Wajan") :: BasePart?
+        local oil = cart:FindFirstChild("MinyakGoreng") :: BasePart?
+        if wajan and upgradeId == "wajan_jumbo" then
+            wajan.Size = Vector3.new(3.1, 0.55, 3.1)
+            if oil then oil.Size = Vector3.new(2.75, 0.16, 2.75) end
+        elseif wajan and upgradeId == "wajan_anti_lengket" then
+            wajan.Color = Color3.fromRGB(22, 24, 28)
+            wajan.Material = Enum.Material.SmoothPlastic
+        end
+    elseif upgradeId == "etalase_2tingkat" then
+        if not cart:FindFirstChild("GlassShelfTop") then
+            local glass = cart:FindFirstChild("EtalaseKaca") :: BasePart?
+            local refCFrame = if glass then glass.CFrame else chassis.CFrame
+            createPart(cart, "GlassShelfTop", Vector3.new(3.0, 0.2, 3.6), refCFrame * CFrame.new(0, 0.5, 0), CART_PALETTE.WoodTrim, Enum.Material.Wood, false)
+        end
+    elseif upgradeId == "spanduk_neon" then
+        local banner = cart:FindFirstChild("CartBanner") :: BasePart?
+        if banner and not banner:FindFirstChild("NeonGlowLight") then
+            banner.Color = Color3.fromRGB(255, 70, 175)
+            banner.Material = Enum.Material.Neon
+            local pl = Instance.new("PointLight")
+            pl.Name = "NeonGlowLight"
+            pl.Color = Color3.fromRGB(255, 110, 210)
+            pl.Range = 18
+            pl.Brightness = 1.6
+            pl.Shadows = false
+            pl.Parent = banner
+        end
+    elseif upgradeId == "lampu_tenda_hias" then
+        local canopy = cart:FindFirstChild("Canopy") :: BasePart?
+        if canopy and not cart:FindFirstChild("LampuTenda1") then
+            local l1 = createPart(cart, "LampuTenda1", Vector3.new(0.6, 0.6, 0.6), canopy.CFrame * CFrame.new(-2.8, -0.45, 2.2), Color3.fromRGB(255, 225, 110), Enum.Material.Neon, false)
+            createPart(cart, "LampuTenda2", Vector3.new(0.6, 0.6, 0.6), canopy.CFrame * CFrame.new(2.8, -0.45, 2.2), Color3.fromRGB(255, 225, 110), Enum.Material.Neon, false)
+            local pl = Instance.new("PointLight")
+            pl.Color = Color3.fromRGB(255, 220, 130)
+            pl.Range = 16
+            pl.Brightness = 1.4
+            pl.Shadows = false
+            pl.Parent = l1
+        end
+    elseif upgradeId == "rangka_anti_razia" then
+        if not cart:FindFirstChild("BumperAntiRazia") then
+            createPart(cart, "BumperAntiRazia", Vector3.new(7.4, 0.55, 4.6), chassis.CFrame * CFrame.new(0, -1.0, 0), Color3.fromRGB(45, 115, 200), Enum.Material.Metal, false)
+        end
+    elseif upgradeId == "papan_promo" then
+        local bannerGui = cart:FindFirstChild("CartBanner") and cart.CartBanner:FindFirstChild("BannerGui")
+        local lbl = if bannerGui then bannerGui:FindFirstChildOfClass("TextLabel") else nil
+        if lbl then
+            lbl.Text = "⭐ " .. player.Name:upper() .. " VIRAL! ⭐"
+        end
+    end
+end
+
+function CartService:ApplyChiliVisuals(player: Player, chiliId: string)
+    local chili = ChiliGachaConfig.GetChili(chiliId)
+    local cart = self:GetPlayerCart(player)
+    if not chili or not cart then return end
+    local chassis = cart:FindFirstChild("Chassis") :: BasePart?
+    if not chassis then return end
+
+    local oldJar = cart:FindFirstChild("ToplesCabai")
+    if oldJar then oldJar:Destroy() end
+
+    -- Toples kaca berisi cabai langka di atas meja gerobak
+    local jar = createPart(cart, "ToplesCabai", Vector3.new(0.85, 1.0, 0.85), chassis.CFrame * CFrame.new(0.2, 2.0, 1.4), chili.Color, Enum.Material.Neon, false)
+    jar.Transparency = 0.15
+
+    if chili.Rarity == "Rare" or chili.Rarity == "Epic" or chili.Rarity == "Mythic" then
+        local aura = Instance.new("ParticleEmitter")
+        aura.Name = "ChiliAuraParticles"
+        if chili.Rarity == "Mythic" then
+            aura.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 220, 40)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 80, 255)),
+            })
+        else
+            aura.Color = ColorSequence.new(chili.Color)
+        end
+        aura.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 0.35) })
+        aura.Rate = if chili.Rarity == "Mythic" then 14 else 7
+        aura.Speed = NumberRange.new(1, 2)
+        aura.Lifetime = NumberRange.new(0.6, 1.0)
+        aura.Parent = jar
+    end
 end
 
 function CartService:GetPlayerCart(player: Player): Model?
@@ -290,11 +472,13 @@ function CartService:UpdateCartFoodVisual(player: Player, state: string, progres
 
     local sizzle = foodVisual:FindFirstChild("SizzleParticles") :: ParticleEmitter?
     local smoke = foodVisual:FindFirstChild("SmokeParticles") :: ParticleEmitter?
+    local crispySparkles = foodVisual:FindFirstChild("CrispySparkles") :: ParticleEmitter?
 
     if state == "Empty" then
         foodVisual.Transparency = 1
         if sizzle then sizzle.Rate = 0 end
         if smoke then smoke.Rate = 0 end
+        if crispySparkles then crispySparkles.Rate = 0 end
     elseif state == "Cooking" then
         foodVisual.Transparency = 0
         if sizzle then sizzle.Rate = 18 end
@@ -303,14 +487,17 @@ function CartService:UpdateCartFoodVisual(player: Player, state: string, progres
             -- 0–30%: Undercooked / Mentah (Warna pucat)
             foodVisual.Color = CART_PALETTE.RawBatter
             if smoke then smoke.Rate = 0 end
+            if crispySparkles then crispySparkles.Rate = 0 end
         elseif progressPercent <= 0.80 then
-            -- 31–80%: Crispy (Kuning emas menggoda)
+            -- 31–80%: Crispy (Kuning emas menggoda + kilau renyah)
             foodVisual.Color = CART_PALETTE.CrispyGold
             if smoke then smoke.Rate = 0 end
+            if crispySparkles then crispySparkles.Rate = 14 end
         else
             -- 81–100%+: Gosong / Burnt (Hitam gosong & asap tebal)
             foodVisual.Color = CART_PALETTE.BurntChar
             if smoke then smoke.Rate = 22 end
+            if crispySparkles then crispySparkles.Rate = 0 end
         end
     end
 end
@@ -324,6 +511,15 @@ function CartService:StartPushCart(player: Player): { Success: boolean, Error: s
     local cart = self._playerCarts[player.UserId]
     if not cart then
         return { Success = false, Error = "Kamu belum memiliki gerobak!" }
+    end
+
+    local serverFolder = script and script.Parent
+    local throwMod = if serverFolder then serverFolder:FindFirstChild("ThrowableService") else nil
+    if throwMod then
+        local throwService = require(throwMod)
+        if throwService and throwService.IsPlayerRagdolled and throwService:IsPlayerRagdolled(player) then
+            return { Success = false, Error = "Kamu sedang sempoyongan dan tidak dapat mendorong gerobak!" }
+        end
     end
 
     local char = player.Character

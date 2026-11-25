@@ -28,9 +28,14 @@ local CookingController = {
     _activeRecipeId = "",
     _startTime = 0,
     _totalDuration = 10.0,
+    _undercookedMax = 0.30,
+    _crispyMax = 0.80,
     _gui = nil :: ScreenGui?,
     _containerFrame = nil :: Frame?,
     _needle = nil :: Frame?,
+    _zoneUnder = nil :: Frame?,
+    _zoneCrispy = nil :: Frame?,
+    _zoneBurnt = nil :: Frame?,
     _statusLabel = nil :: TextLabel?,
     _liftButton = nil :: TextButton?,
     _renderConn = nil :: RBXScriptConnection?,
@@ -47,9 +52,9 @@ function CookingController:Init()
     log:Info("Menginisialisasi CookingController...")
 
     -- Dengarkan event perubahan status masak dari server
-    NetworkBridge.OnClientEvent(Remotes.Events.CookStateChanged, function(state: string, recipeId: string, startTime: number, totalDuration: number)
+    NetworkBridge.OnClientEvent(Remotes.Events.CookStateChanged, function(state: string, recipeId: string, startTime: number, totalDuration: number, undercookedMax: number?, crispyMax: number?)
         if state == "Cooking" then
-            self:OpenCookingMeter(recipeId, startTime, totalDuration)
+            self:OpenCookingMeter(recipeId, startTime, totalDuration, undercookedMax, crispyMax)
         else
             self:CloseCookingMeter()
         end
@@ -205,26 +210,50 @@ function CookingController:_createCookingGUI()
     self._gui = screenGui
     self._containerFrame = container
     self._needle = needle
+    self._zoneUnder = zoneUndercooked
+    self._zoneCrispy = zoneCrispy
+    self._zoneBurnt = zoneBurnt
     self._statusLabel = status
     self._liftButton = liftBtn
     screenGui.Parent = playerGui
 end
 
-function CookingController:OpenCookingMeter(recipeId: string, startTime: number, totalDuration: number)
+function CookingController:OpenCookingMeter(recipeId: string, startTime: number, totalDuration: number, undercookedMaxOverride: number?, crispyMaxOverride: number?)
     self._isCooking = true
     self._activeRecipeId = recipeId
     self._startTime = startTime
     self._totalDuration = totalDuration or 10.0
+
+    local recipe = RecipesConfig.GetRecipe(recipeId)
+    local uMax = undercookedMaxOverride or (if recipe then recipe.UndercookedMaxPercent else 0.30)
+    local cMax = crispyMaxOverride or (if recipe then recipe.CrispyMaxPercent else 0.80)
+    self._undercookedMax = uMax
+    self._crispyMax = cMax
+
+    -- Perbarui ukuran visual zona kematangan sesuai kesulitan resep & upgrade kompor/wajan
+    if self._zoneUnder then
+        self._zoneUnder.Size = UDim2.new(uMax, 0, 1, 0)
+        self._zoneUnder.Position = UDim2.new(0, 0, 0, 0)
+    end
+    if self._zoneCrispy then
+        self._zoneCrispy.Size = UDim2.new(math.max(0.05, cMax - uMax), 0, 1, 0)
+        self._zoneCrispy.Position = UDim2.new(uMax, 0, 0, 0)
+    end
+    if self._zoneBurnt then
+        self._zoneBurnt.Size = UDim2.new(math.max(0.05, 1.0 - cMax), 0, 1, 0)
+        self._zoneBurnt.Position = UDim2.new(cMax, 0, 0, 0)
+    end
 
     if self._gui then
         self._gui.Enabled = true
     end
 
     local title = self._containerFrame and self._containerFrame:FindFirstChild("RecipeTitle") :: TextLabel?
-    local recipe = RecipesConfig.GetRecipe(recipeId)
     if title and recipe then
-        title.Text = "MENGGORENG " .. recipe.Name:upper()
+        title.Text = string.format("MENGGORENG %s (%.1fs)", recipe.Name:upper(), self._totalDuration)
     end
+
+    local crispyCuePlayed = false
 
     -- Loop render update jarum meteran per frame
     if self._renderConn then self._renderConn:Disconnect() end
@@ -239,15 +268,25 @@ function CookingController:OpenCookingMeter(recipeId: string, startTime: number,
             self._needle.Position = UDim2.new(progress, -2, 0, -3)
         end
 
-        -- Update teks status berdasarkan persentase
+        -- Update teks status berdasarkan persentase dinamis
         if self._statusLabel then
-            if progress <= 0.30 then
+            if progress <= self._undercookedMax then
                 self._statusLabel.Text = string.format("⏳ Masih Mentah (%.1f s) — Tunggu keemasan!", elapsed)
                 self._statusLabel.TextColor3 = METER_COLORS.Undercooked
                 if self._liftButton then
                     self._liftButton.BackgroundColor3 = Color3.fromRGB(100, 120, 140)
                 end
-            elseif progress <= 0.80 then
+            elseif progress <= self._crispyMax then
+                if not crispyCuePlayed then
+                    crispyCuePlayed = true
+                    local audioMod = script.Parent:FindFirstChild("AudioVFXController")
+                    if audioMod then
+                        local audioCtrl = require(audioMod)
+                        if audioCtrl and (audioCtrl :: any).PlayCrispyFanfare then
+                            (audioCtrl :: any):PlayCrispyFanfare()
+                        end
+                    end
+                end
                 self._statusLabel.Text = string.format("🌟 CRISPY EMAS! (%.1f s) — ANGKAT SEKARANG! 🌟", elapsed)
                 self._statusLabel.TextColor3 = METER_COLORS.Crispy
                 if self._liftButton then

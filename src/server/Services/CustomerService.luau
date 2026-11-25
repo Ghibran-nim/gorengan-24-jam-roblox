@@ -33,10 +33,21 @@ local CustomerService = {
     _activeOrders = {} :: { [string]: CustomerOrder }, -- [CustomerId] = Order
     _plotQueues = {} :: { [number]: { string } },      -- [PlotId] = { CustomerId1, CustomerId2, ... }
     _customerModels = {} :: { [string]: Model },       -- [CustomerId] = Model
+    _kasirModels = {} :: { [number]: Model },          -- [UserId] = KasirModel
     _services = {} :: { [string]: any },
     _orderCounter = 0,
     _spawningActive = false,
 }
+
+function CustomerService:_getService(serviceName: string): any
+    if not self._services[serviceName] and script and script.Parent then
+        local mod = script.Parent:FindFirstChild(serviceName)
+        if mod then
+            self._services[serviceName] = require(mod)
+        end
+    end
+    return self._services[serviceName]
+end
 
 function CustomerService:Init()
     log:Info("Menginisialisasi CustomerService...")
@@ -45,6 +56,14 @@ function CustomerService:Init()
         self._plotQueues[plotId] = {}
     end
 
+    Players.PlayerRemoving:Connect(function(player: Player)
+        local kasir = self._kasirModels[player.UserId]
+        if kasir then
+            kasir:Destroy()
+            self._kasirModels[player.UserId] = nil
+        end
+    end)
+
     -- Daftarkan handler permintaan melayani pelanggan
     NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestServeCustomer, function(player: Player, customerId: string)
         return self:HandleServeCustomer(player, customerId)
@@ -52,15 +71,12 @@ function CustomerService:Init()
 end
 
 function CustomerService:Start()
-    local Server = script.Parent
-    self._services.InventoryService = require(Server:WaitForChild("InventoryService"))
-    self._services.EconomyService = require(Server:WaitForChild("EconomyService"))
-    self._services.GameService = require(Server:WaitForChild("GameService"))
-    self._services.MapService = require(Server:WaitForChild("MapService"))
-    local tsMod = Server:FindFirstChild("TutorialService")
-    if tsMod then
-        self._services.TutorialService = require(tsMod)
-    end
+    self:_getService("InventoryService")
+    self:_getService("EconomyService")
+    self:_getService("GameService")
+    self:_getService("MapService")
+    self:_getService("TutorialService")
+    self:_getService("ProgressionService")
 
     log:Info("CustomerService aktif. Memulai spawner pelanggan...")
     self._spawningActive = true
@@ -120,22 +136,130 @@ local function createCustomerRig(customerId: string, archetype: CustomerArchetyp
     weldHead.Part1 = head
     weldHead.Parent = torso
 
-    -- Legs (Celana)
-    for _, legOffset in { -0.5, 0.5 } do
+    -- Mata ekspresif sederhana
+    for _, eyeX in { -0.25, 0.25 } do
+        local eye = Instance.new("Part")
+        eye.Name = "Eye"
+        eye.Size = Vector3.new(0.16, 0.2, 0.1)
+        eye.CFrame = CFrame.new(spawnPos + Vector3.new(eyeX, 1.58, -0.6))
+        eye.Color = Color3.fromRGB(20, 20, 24)
+        eye.Material = Enum.Material.SmoothPlastic
+        eye.CanCollide = false
+        eye.Anchored = false
+        eye.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = head
+        w.Part1 = eye
+        w.Parent = head
+    end
+
+    -- Aksesori khas arketipe jalanan Indonesia
+    if archetype.Id == "ojol" then
+        local helmet = Instance.new("Part")
+        helmet.Name = "OjolHelmet"
+        helmet.Size = Vector3.new(1.38, 0.72, 1.38)
+        helmet.CFrame = CFrame.new(spawnPos + Vector3.new(0, 1.95, 0))
+        helmet.Color = Color3.fromRGB(35, 165, 65)
+        helmet.Material = Enum.Material.SmoothPlastic
+        helmet.CanCollide = false
+        helmet.Anchored = false
+        helmet.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = head
+        w.Part1 = helmet
+        w.Parent = head
+    elseif archetype.Id == "misterius" then
+        local shades = Instance.new("Part")
+        shades.Name = "SultanShades"
+        shades.Size = Vector3.new(1.1, 0.28, 0.2)
+        shades.CFrame = CFrame.new(spawnPos + Vector3.new(0, 1.58, -0.64))
+        shades.Color = Color3.fromRGB(15, 15, 18)
+        shades.Material = Enum.Material.Glass
+        shades.CanCollide = false
+        shades.Anchored = false
+        shades.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = head
+        w.Part1 = shades
+        w.Parent = head
+    elseif archetype.Id == "mahasiswa" then
+        local bag = Instance.new("Part")
+        bag.Name = "Backpack"
+        bag.Size = Vector3.new(1.5, 1.4, 0.7)
+        bag.CFrame = CFrame.new(spawnPos + Vector3.new(0, 0.05, 0.75))
+        bag.Color = Color3.fromRGB(45, 75, 125)
+        bag.Material = Enum.Material.Fabric
+        bag.CanCollide = false
+        bag.Anchored = false
+        bag.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = torso
+        w.Part1 = bag
+        w.Parent = torso
+    elseif archetype.Id == "food_vlogger" then
+        local cam = Instance.new("Part")
+        cam.Name = "VloggerCamera"
+        cam.Size = Vector3.new(0.45, 0.45, 0.65)
+        cam.CFrame = CFrame.new(spawnPos + Vector3.new(1.45, 0.1, -0.75))
+        cam.Color = Color3.fromRGB(30, 30, 36)
+        cam.Material = Enum.Material.Metal
+        cam.CanCollide = false
+        cam.Anchored = false
+        cam.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = torso
+        w.Part1 = cam
+        w.Parent = torso
+    end
+
+    -- Lengan & Kaki dengan Motor6D agar dapat dianimasikan mulus di Client
+    local armSpecs = {
+        { Name = "LeftArm", OffsetX = -1.45 },
+        { Name = "RightArm", OffsetX = 1.45 },
+    }
+    for _, spec in ipairs(armSpecs) do
+        local arm = Instance.new("Part")
+        arm.Name = spec.Name
+        arm.Size = Vector3.new(0.8, 1.8, 0.8)
+        arm.CFrame = CFrame.new(spawnPos + Vector3.new(spec.OffsetX, 0, 0))
+        arm.Color = archetype.Colors.Shirt
+        arm.Material = Enum.Material.SmoothPlastic
+        arm.CanCollide = false
+        arm.Anchored = false
+        arm.Parent = model
+
+        local m6 = Instance.new("Motor6D")
+        m6.Name = spec.Name .. "Joint"
+        m6.Part0 = torso
+        m6.Part1 = arm
+        m6.C0 = CFrame.new(spec.OffsetX, 0.6, 0)
+        m6.C1 = CFrame.new(0, 0.6, 0)
+        m6.Parent = torso
+    end
+
+    -- Legs (Celana) dengan Motor6D
+    local legSpecs = {
+        { Name = "LeftLeg", OffsetX = -0.5 },
+        { Name = "RightLeg", OffsetX = 0.5 },
+    }
+    for _, spec in ipairs(legSpecs) do
         local leg = Instance.new("Part")
-        leg.Name = "Leg"
+        leg.Name = spec.Name
         leg.Size = Vector3.new(0.9, 2, 0.9)
-        leg.CFrame = CFrame.new(spawnPos + Vector3.new(legOffset, -1.8, 0))
+        leg.CFrame = CFrame.new(spawnPos + Vector3.new(spec.OffsetX, -1.8, 0))
         leg.Color = archetype.Colors.Pants
         leg.Material = Enum.Material.SmoothPlastic
         leg.CanCollide = false
         leg.Anchored = false
         leg.Parent = model
 
-        local weldLeg = Instance.new("WeldConstraint")
-        weldLeg.Part0 = torso
-        weldLeg.Part1 = leg
-        weldLeg.Parent = torso
+        local m6 = Instance.new("Motor6D")
+        m6.Name = spec.Name .. "Joint"
+        m6.Part0 = torso
+        m6.Part1 = leg
+        m6.C0 = CFrame.new(spec.OffsetX, -1.0, 0)
+        m6.C1 = CFrame.new(0, 0.9, 0)
+        m6.Parent = torso
     end
 
     -- Humanoid untuk navigasi gerak
@@ -243,9 +367,32 @@ end
 -- AI CONTROLLER & QUEUE MANAGEMENT
 -- ============================================================================
 
+function CustomerService:_getPlotOwner(plotId: number): Player?
+    local gameService = self:_getService("GameService")
+    if not gameService then return nil end
+    for _, p in Players:GetPlayers() do
+        if gameService:GetPlayerPlot(p) == plotId then
+            return p
+        end
+    end
+    return nil
+end
+
 function CustomerService:_runCustomerSpawnerLoop()
     while self._spawningActive do
-        task.wait(math.random(6, 10))
+        local hasAnyNeon = false
+        local ecoService = self:_getService("EconomyService")
+        if ecoService and ecoService.HasUpgrade then
+            for _, p in Players:GetPlayers() do
+                if ecoService:HasUpgrade(p, "spanduk_neon") then
+                    hasAnyNeon = true
+                    break
+                end
+            end
+        end
+
+        local waitSecs = if hasAnyNeon then math.random(4, 7) else math.random(6, 10)
+        task.wait(waitSecs)
 
         -- Cek batas global NPC
         local totalActive = 0
@@ -255,7 +402,7 @@ function CustomerService:_runCustomerSpawnerLoop()
 
         if totalActive < GLOBAL_NPC_CAP then
             -- Cari plot aktif yang memiliki pemain
-            local gameService = self._services.GameService
+            local gameService = self:_getService("GameService")
             for _, player in Players:GetPlayers() do
                 local plotId = if gameService then gameService:GetPlayerPlot(player) else nil
                 if plotId then
@@ -270,6 +417,68 @@ function CustomerService:_runCustomerSpawnerLoop()
     end
 end
 
+function CustomerService:SpawnSpecialCustomer(archetypeId: string, plotId: number): string?
+    local queue = self._plotQueues[plotId]
+    if not queue then return nil end
+
+    -- Jika antrean penuh, ijinkan 1 slot khusus VIP/Event tambahan (maks 4)
+    if #queue >= MAX_CUSTOMERS_PER_QUEUE + 1 then
+        return nil
+    end
+
+    local archetype = CustomerConfig.GetArchetype(archetypeId)
+    if not archetype then return nil end
+
+    self._orderCounter += 1
+    local customerId = "CUST_" .. tostring(self._orderCounter)
+
+    local owner = self:_getPlotOwner(plotId)
+    local progService = self:_getService("ProgressionService")
+    local unlockedList = if owner and progService and progService.GetUnlockedRecipeIds then progService:GetUnlockedRecipeIds(owner) else { "bakwan_sayur" }
+
+    local eligible = {}
+    for _, rId in ipairs(archetype.AllowedRecipes) do
+        if table.find(unlockedList, rId) then
+            table.insert(eligible, rId)
+        end
+    end
+    if #eligible == 0 then
+        eligible = unlockedList
+    end
+
+    local recipeId = eligible[math.random(1, #eligible)] or "bakwan_sayur"
+    local spawnX = if math.random() > 0.5 then 160 else -160
+    local isNorth = (plotId <= 4)
+    local spawnZ = if isNorth then 22 else -22
+    local spawnPos = Vector3.new(spawnX, 3.5, spawnZ)
+
+    local model = createCustomerRig(customerId, archetype, spawnPos)
+    self._customerModels[customerId] = model
+
+    local nextSlot = #queue + 1
+    local order: CustomerOrder = {
+        CustomerId = customerId,
+        ArchetypeId = archetype.Id,
+        PlotId = plotId,
+        RecipeId = recipeId,
+        Quantity = 1,
+        CreatedAt = os.clock(),
+        PatienceDuration = archetype.BasePatience,
+        State = "Approaching",
+        QueueSlot = nextSlot,
+    }
+
+    self._activeOrders[customerId] = order
+    table.insert(queue, customerId)
+
+    log:Info("NPC Spesial Event '%s' (%s) muncul untuk Plot #%d, memesan %s", customerId, archetype.Name, plotId, recipeId)
+    task.spawn(function()
+        self:_runCustomerAI(customerId)
+    end)
+
+    return customerId
+end
+
 function CustomerService:SpawnCustomerForPlot(plotId: number): string?
     local queue = self._plotQueues[plotId]
     if not queue or #queue >= MAX_CUSTOMERS_PER_QUEUE then
@@ -280,9 +489,22 @@ function CustomerService:SpawnCustomerForPlot(plotId: number): string?
     local customerId = "CUST_" .. tostring(self._orderCounter)
     local archetype = CustomerConfig.GetRandomArchetype()
 
-    -- Pilih resep favorit dari tipe pelanggan
-    local randomRecipeIndex = math.random(1, #archetype.AllowedRecipes)
-    local recipeId = archetype.AllowedRecipes[randomRecipeIndex]
+    -- Filter pesanan agar hanya memilih resep yang sudah dibuka oleh pemilik plot!
+    local owner = self:_getPlotOwner(plotId)
+    local progService = self:_getService("ProgressionService")
+    local unlockedList = if owner and progService and progService.GetUnlockedRecipeIds then progService:GetUnlockedRecipeIds(owner) else { "bakwan_sayur" }
+
+    local eligible = {}
+    for _, rId in ipairs(archetype.AllowedRecipes) do
+        if table.find(unlockedList, rId) then
+            table.insert(eligible, rId)
+        end
+    end
+    if #eligible == 0 then
+        eligible = unlockedList
+    end
+
+    local recipeId = eligible[math.random(1, #eligible)] or "bakwan_sayur"
 
     -- Tentukan posisi spawn di ujung trotoar timur/barat
     local spawnX = if math.random() > 0.5 then 160 else -160
@@ -474,6 +696,10 @@ end
 -- ============================================================================
 
 function CustomerService:HandleServeCustomer(player: Player, customerId: string): { Success: boolean, Error: string?, Payout: number?, Quality: string? }
+    return self:_executeServe(player, customerId, false)
+end
+
+function CustomerService:_executeServe(player: Player, customerId: string, isAutoKasir: boolean): { Success: boolean, Error: string?, Payout: number?, Quality: string? }
     local order = self._activeOrders[customerId]
     local model = self._customerModels[customerId]
 
@@ -486,22 +712,24 @@ function CustomerService:HandleServeCustomer(player: Player, customerId: string)
     end
 
     -- 1. Validasi kepemilikan plot (Pemain hanya melayani pembeli di gerobaknya sendiri)
-    local gameService = self._services.GameService
+    local gameService = self:_getService("GameService")
     local playerPlot = if gameService then gameService:GetPlayerPlot(player) else nil
     if not playerPlot or playerPlot ~= order.PlotId then
         return { Success = false, Error = "Kamu tidak bisa melayani pelanggan di gerobak pemain lain!" }
     end
 
-    -- 2. Validasi jarak fisik pemain ke pelanggan
-    local char = player.Character
-    local hrp = if char then char:FindFirstChild("HumanoidRootPart") else nil
     local custHrp = model.PrimaryPart
-    if not hrp or not custHrp or (hrp.Position - custHrp.Position).Magnitude > 16 then
-        return { Success = false, Error = "Jarak terlalu jauh dari pelanggan!" }
+    if not isAutoKasir then
+        -- 2. Validasi jarak fisik pemain ke pelanggan (hanya untuk serve manual)
+        local char = player.Character
+        local hrp = if char then char:FindFirstChild("HumanoidRootPart") else nil
+        if not hrp or not custHrp or (hrp.Position - custHrp.Position).Magnitude > 16 then
+            return { Success = false, Error = "Jarak terlalu jauh dari pelanggan!" }
+        end
     end
 
     -- 3. Periksa stok etalase gorengan di inventaris pemain
-    local inventoryService = self._services.InventoryService
+    local inventoryService = self:_getService("InventoryService")
     if not inventoryService then
         return { Success = false, Error = "Layanan inventaris tidak tersedia!" }
     end
@@ -529,56 +757,181 @@ function CustomerService:HandleServeCustomer(player: Player, customerId: string)
         return { Success = false, Error = "Gagal memproses penyerahan gorengan!" }
     end
 
-    -- 5. Hitung harga dan transaksi pembayaran
+    -- 5. Hitung harga & bonus upgrade bisnis/dekorasi
     local recipe = RecipesConfig.GetRecipe(order.RecipeId)
-    local basePrice = if recipe then recipe.BasePrice else 2000
+    local basePrice = if recipe then recipe.BasePrice else 2200
     local archetype = CustomerConfig.GetArchetype(order.ArchetypeId) or CustomerConfig.GetRandomArchetype()
+
+    local economyService = self:_getService("EconomyService")
+    local hasPromo = economyService and economyService.HasUpgrade and economyService:HasUpgrade(player, "papan_promo")
+    local hasLampuHias = economyService and economyService.HasUpgrade and economyService:HasUpgrade(player, "lampu_tenda_hias")
+
+    if hasPromo then
+        basePrice = math.floor(basePrice * 1.15)
+    end
+
+    -- Bonus event Hujan Deras (+25% harga jual gorengan hangat)
+    local eventService = self:_getService("EventService")
+    if eventService and eventService.IsRaining and eventService:IsRaining() then
+        basePrice = math.floor(basePrice * 1.25)
+    end
 
     local finalPayout = basePrice
     local reactionDialogue: string
 
     if servedQuality == "Crispy" then
-        -- Bonus tips 20% dikali multiplier pelanggan
-        local tipBonus = math.floor(basePrice * archetype.TipMultiplier * 0.20)
+        local nightBonus = if eventService and eventService.IsNightMarketActive and eventService:IsNightMarketActive() then 0.30 else 0
+        local tipMult = archetype.TipMultiplier + (if hasLampuHias then 0.15 else 0) + nightBonus
+        local tipBonus = math.floor(basePrice * tipMult * 0.20)
         finalPayout = basePrice + tipBonus
         reactionDialogue = archetype.Dialogues.CrispyHappy[math.random(1, #archetype.Dialogues.CrispyHappy)]
     else
-        -- Kualitas undercooked terkena penalti 50%
         finalPayout = math.floor(basePrice * 0.5)
         reactionDialogue = archetype.Dialogues.UndercookedSad[math.random(1, #archetype.Dialogues.UndercookedSad)]
     end
 
-    -- Tambah uang kas pedagang
-    local economyService = self._services.EconomyService
+    -- Terapkan multiplier cabai langka yang sedang dipasang di gerobak
+    local chiliService = self:_getService("ChiliService")
+    local chiliMult = if chiliService and chiliService.GetEquippedProfitMultiplier then chiliService:GetEquippedProfitMultiplier(player) else 1.0
+    if chiliMult > 1.0 then
+        finalPayout = math.floor(finalPayout * chiliMult)
+    end
+
+    -- Bonus event kompetisi omzet server-wide (+20%)
+    local socialService = self:_getService("SocialService")
+    if socialService and socialService.IsCompetitionActive and socialService:IsCompetitionActive() then
+        finalPayout = math.floor(finalPayout * 1.20)
+    end
+
     if economyService then
-        economyService:AddCarriedCash(player, finalPayout, "Penjualan " .. (recipe and recipe.Name or order.RecipeId))
+        economyService:AddCarriedCash(player, finalPayout, (if isAutoKasir then "[Kasir] " else "") .. "Penjualan " .. (recipe and recipe.Name or order.RecipeId))
+    end
+
+    -- 6. Catat penjualan & berikan XP ke ProgressionService (plus bonus XP cabai langka)
+    local progService = self:_getService("ProgressionService")
+    if progService then
+        local ProgressionConfig = require(Shared:WaitForChild("Config"):WaitForChild("ProgressionConfig"))
+        local xpGain = ProgressionConfig.XPRewards.ServeCustomerBase + (if servedQuality == "Crispy" then ProgressionConfig.XPRewards.ServeCrispyBonus else 0)
+        local chiliXpBonus = if chiliService and chiliService.GetEquippedXPBonusPercent then chiliService:GetEquippedXPBonusPercent(player) else 0
+        if chiliXpBonus > 0 then
+            xpGain = math.floor(xpGain * (1.0 + chiliXpBonus))
+        end
+        progService:AddXP(player, xpGain, "Layani " .. archetype.Name)
+        progService:RecordSale(player, finalPayout)
     end
 
     order.State = "Served"
-    log:Info("Pemain %s sukses menyajikan %s (%s) ke %s -> Bayaran: Rp %d", player.Name, order.RecipeId, servedQuality, customerId, finalPayout)
+    log:Info("Pemain %s sukses menyajikan %s (%s) ke %s (AutoKasir=%s) -> Bayaran: Rp %d", player.Name, order.RecipeId, servedQuality, customerId, tostring(isAutoKasir), finalPayout)
 
-    -- Tampilkan feedback reaksi pada balon pembeli
     self:_updateBubbleText(model, string.format("+Rp %d (%s)!", finalPayout, servedQuality:upper()), reactionDialogue)
 
-    -- Hapus ProximityPrompt
-    local prompt = custHrp:FindFirstChild("ServePrompt")
-    if prompt then prompt:Destroy() end
+    if custHrp then
+        local prompt = custHrp:FindFirstChild("ServePrompt")
+        if prompt then prompt:Destroy() end
+    end
 
-    -- Beri sinyal event pesanan selesai
     NetworkBridge.FireClient(player, Remotes.Events.CustomerOrderCompleted, customerId, finalPayout, servedQuality)
 
-    local ts = self._services and self._services.TutorialService
+    local ts = self:_getService("TutorialService")
     if ts and ts.OnCustomerServed then
         ts:OnCustomerServed(player)
     end
 
-    -- Pelanggan pergi & antrean maju
     task.spawn(function()
         task.wait(1.5)
         self:_despawnCustomer(customerId, order.PlotId)
     end)
 
     return { Success = true, Payout = finalPayout, Quality = servedQuality }
+end
+
+function CustomerService:SpawnKasirForPlayer(player: Player): Model?
+    local userId = player.UserId
+    if self._kasirModels[userId] and self._kasirModels[userId].Parent then
+        return self._kasirModels[userId]
+    end
+
+    local gameService = self:_getService("GameService")
+    local cartService = self:_getService("CartService")
+    local plotId = (if gameService then gameService:GetPlayerPlot(player) else nil)
+        or (if cartService and cartService._playerPlotIds then cartService._playerPlotIds[userId] else nil)
+        or 1
+    local map = Workspace:FindFirstChild("Map")
+    local plots = if map then map:FindFirstChild("PlayerPlots") else nil
+    local plot = if plots then plots:FindFirstChild("Plot_" .. tostring(plotId or 1)) else nil
+    local baseCFrame = if plot then plot:GetPivot() else CFrame.new(0, 3, 20)
+    local kasirPos = (baseCFrame * CFrame.new(5.2, 3.2, 1.5)).Position
+
+    local kasirArch: CustomerArchetype = {
+        Id = "kasir_npc",
+        Name = "Kasir Mas Budi",
+        Title = "Kasir Otomatis",
+        BasePatience = 999,
+        SpawnWeight = 0,
+        TipMultiplier = 1,
+        ReputationReward = 0,
+        ReputationPenalty = 0,
+        AllowedRecipes = {},
+        OrderQuantityMax = 1,
+        Colors = {
+            Shirt = Color3.fromRGB(30, 145, 75),
+            Pants = Color3.fromRGB(40, 42, 48),
+            Skin = Color3.fromRGB(225, 185, 145),
+        },
+        Dialogues = { Ordering = {}, CrispyHappy = {}, UndercookedSad = {}, Impatient = {}, AngryLeave = {} },
+    }
+
+    local kasirModel = createCustomerRig("KASIR_" .. player.Name, kasirArch, kasirPos)
+    kasirModel.Name = "Kasir_" .. player.Name
+    if kasirModel.PrimaryPart then
+        kasirModel.PrimaryPart.Anchored = true
+    end
+    for _, part in kasirModel:GetDescendants() do
+        if part:IsA("BasePart") then
+            part.Anchored = true
+        end
+    end
+
+    local head = kasirModel:FindFirstChild("Head")
+    local bb = if head then head:FindFirstChild("OrderBubble") :: BillboardGui? else nil
+    if bb then
+        local bg = bb:FindFirstChildOfClass("Frame")
+        local nLbl = if bg then bg:FindFirstChild("NameLabel") :: TextLabel? else nil
+        local oLbl = if bg then bg:FindFirstChild("OrderLabel") :: TextLabel? else nil
+        local dLbl = if bg then bg:FindFirstChild("DialogueLabel") :: TextLabel? else nil
+        if nLbl then nLbl.Text = "🧑‍💼 KASIR MAS BUDI" end
+        if oLbl then oLbl.Text = "Siap Melayani Otomatis!" end
+        if dLbl then dLbl.Text = "Fokus goreng aja Bos!" end
+    end
+
+    kasirModel.Parent = Workspace
+    self._kasirModels[userId] = kasirModel
+    log:Info("Kasir NPC 'Mas Budi' ditempatkan di Plot #%s untuk pemain %s", tostring(plotId), player.Name)
+
+    -- Jalankan loop auto-serve setiap 2.5 detik
+    task.spawn(function()
+        while kasirModel.Parent and self._kasirModels[userId] == kasirModel do
+            task.wait(2.5)
+            local currentPlot = if gameService then gameService:GetPlayerPlot(player) else nil
+            local queue = if currentPlot then self._plotQueues[currentPlot] else nil
+            if queue and #queue > 0 then
+                local firstCustId = queue[1]
+                local order = self._activeOrders[firstCustId]
+                if order and order.State == "WaitingForFood" then
+                    local res = self:_executeServe(player, firstCustId, true)
+                    if res.Success and bb then
+                        local bg = bb:FindFirstChildOfClass("Frame")
+                        local dLbl = if bg then bg:FindFirstChild("DialogueLabel") :: TextLabel? else nil
+                        if dLbl then
+                            dLbl.Text = "Oke beres! +Rp " .. tostring(res.Payout or 0)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    return kasirModel
 end
 
 function CustomerService:_handleCustomerLostPatience(customerId: string, order: CustomerOrder, model: Model, archetype: CustomerArchetype?)
@@ -602,6 +955,23 @@ function CustomerService:_handleCustomerLostPatience(customerId: string, order: 
         task.wait(1.5)
         self:_despawnCustomer(customerId, order.PlotId)
     end)
+end
+
+function CustomerService:ClearPlotCustomers(plotId: number)
+    local queue = self._plotQueues[plotId]
+    if not queue then return end
+
+    local copy = table.clone(queue)
+    for _, customerId in ipairs(copy) do
+        self._activeOrders[customerId] = nil
+        local model = self._customerModels[customerId]
+        if model and model.Parent then
+            model:Destroy()
+        end
+        self._customerModels[customerId] = nil
+    end
+    self._plotQueues[plotId] = {}
+    log:Info("Antrean pelanggan di Plot #%d dibersihkan karena pemilik plot keluar.", plotId)
 end
 
 function CustomerService:_despawnCustomer(customerId: string, plotId: number)

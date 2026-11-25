@@ -61,7 +61,23 @@ local IngredientPacks: { [string]: IngredientPack } = {
         Amount = 5,
         Price = 4000,
         Icon = "🥣",
-        Description = "Pati singkong kenyal untuk Cireng Crispy gurih.",
+        Description = "Pati singkong kenyal untuk Cireng Bumbu Rujak.",
+    },
+    ["egg"] = {
+        Id = "egg",
+        Name = "Telur Ayam Kampung",
+        Amount = 5,
+        Price = 5000,
+        Icon = "🥚",
+        Description = "Telur segar pilihan untuk Martabak Mini & Risol Mayo.",
+    },
+    ["risol_skin"] = {
+        Id = "risol_skin",
+        Name = "Kulit Lumpia & Saus Mayo",
+        Amount = 5,
+        Price = 6000,
+        Icon = "🌯",
+        Description = "Paket kulit renyah & mayones spesial untuk Risol Mayo.",
     },
 }
 
@@ -70,6 +86,12 @@ local EconomyConfig = {
     StartingCarriedCash = 50000, -- Rp 50.000 modal awal
     StartingBankedCash = 0,
     StartingReputation = 100,
+
+    -- Kapasitas penyimpanan bahan mentah & etalase gorengan
+    BaseIngredientCapacity = 30,
+    UpgradedIngredientCapacity = 60,
+    BaseEtalaseCapacity = 12,
+    UpgradedEtalaseCapacity = 28,
 
     -- Multiplier nilai jual berdasarkan kualitas masakan
     QualityMultipliers = {

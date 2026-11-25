@@ -147,22 +147,87 @@ local function createSatpolRig(satpolId: number, spawnPos: Vector3): Model
     weldBeret.Part1 = beret
     weldBeret.Parent = head
 
-    -- Legs (Celana Khaki Tua)
-    for _, legOffset in { -0.5, 0.5 } do
+    -- Mata tegas Satpol PP
+    for _, eyeX in { -0.25, 0.25 } do
+        local eye = Instance.new("Part")
+        eye.Name = "Eye"
+        eye.Size = Vector3.new(0.16, 0.18, 0.1)
+        eye.CFrame = CFrame.new(spawnPos + Vector3.new(eyeX, 1.58, -0.6))
+        eye.Color = Color3.fromRGB(20, 20, 24)
+        eye.Material = Enum.Material.SmoothPlastic
+        eye.CanCollide = false
+        eye.Anchored = false
+        eye.Parent = model
+        local w = Instance.new("WeldConstraint")
+        w.Part0 = head
+        w.Part1 = eye
+        w.Parent = head
+    end
+
+    -- Lengan dengan Motor6D + Pentungan Dinas Satpol di tangan kanan
+    local armSpecs = {
+        { Name = "LeftArm", OffsetX = -1.45 },
+        { Name = "RightArm", OffsetX = 1.45 },
+    }
+    for _, spec in ipairs(armSpecs) do
+        local arm = Instance.new("Part")
+        arm.Name = spec.Name
+        arm.Size = Vector3.new(0.85, 1.8, 0.85)
+        arm.CFrame = CFrame.new(spawnPos + Vector3.new(spec.OffsetX, 0, 0))
+        arm.Color = SATPOL_PALETTE.KhakiShirt
+        arm.Material = Enum.Material.SmoothPlastic
+        arm.CanCollide = false
+        arm.Anchored = false
+        arm.Parent = model
+
+        local m6 = Instance.new("Motor6D")
+        m6.Name = spec.Name .. "Joint"
+        m6.Part0 = torso
+        m6.Part1 = arm
+        m6.C0 = CFrame.new(spec.OffsetX, 0.6, 0)
+        m6.C1 = CFrame.new(0, 0.6, 0)
+        m6.Parent = torso
+
+        if spec.Name == "RightArm" then
+            local baton = Instance.new("Part")
+            baton.Name = "SatpolBaton"
+            baton.Size = Vector3.new(0.25, 0.25, 1.6)
+            baton.CFrame = arm.CFrame * CFrame.new(0, -0.8, -0.6)
+            baton.Color = Color3.fromRGB(30, 30, 34)
+            baton.Material = Enum.Material.Metal
+            baton.CanCollide = false
+            baton.Anchored = false
+            baton.Parent = model
+            local wb = Instance.new("WeldConstraint")
+            wb.Part0 = arm
+            wb.Part1 = baton
+            wb.Parent = arm
+        end
+    end
+
+    -- Legs (Celana Khaki Tua) dengan Motor6D
+    local legSpecs = {
+        { Name = "LeftLeg", OffsetX = -0.5 },
+        { Name = "RightLeg", OffsetX = 0.5 },
+    }
+    for _, spec in ipairs(legSpecs) do
         local leg = Instance.new("Part")
-        leg.Name = "Leg"
+        leg.Name = spec.Name
         leg.Size = Vector3.new(0.9, 2, 0.9)
-        leg.CFrame = CFrame.new(spawnPos + Vector3.new(legOffset, -1.8, 0))
+        leg.CFrame = CFrame.new(spawnPos + Vector3.new(spec.OffsetX, -1.8, 0))
         leg.Color = SATPOL_PALETTE.KhakiPants
         leg.Material = Enum.Material.SmoothPlastic
         leg.CanCollide = false
         leg.Anchored = false
         leg.Parent = model
 
-        local weldLeg = Instance.new("WeldConstraint")
-        weldLeg.Part0 = torso
-        weldLeg.Part1 = leg
-        weldLeg.Parent = torso
+        local m6 = Instance.new("Motor6D")
+        m6.Name = spec.Name .. "Joint"
+        m6.Part0 = torso
+        m6.Part1 = leg
+        m6.C0 = CFrame.new(spec.OffsetX, -1.0, 0)
+        m6.C1 = CFrame.new(0, 0.9, 0)
+        m6.Parent = torso
     end
 
     -- Humanoid dengan kecepatan patroli adil
@@ -231,17 +296,33 @@ local function setSatpolBark(satpolModel: Model, message: string)
     end
 end
 
+function SatpolService:_getSquadFolder(): Folder
+    if self._squadFolder and self._squadFolder.Parent then
+        return self._squadFolder
+    end
+    local existing = Workspace:FindFirstChild("SatpolSquad")
+    if existing and existing:IsA("Folder") then
+        self._squadFolder = existing
+        return existing
+    end
+    local squadFolder = Instance.new("Folder")
+    squadFolder.Name = "SatpolSquad"
+    squadFolder.Parent = Workspace
+    self._squadFolder = squadFolder
+    return squadFolder
+end
+
 function SatpolService:Init()
     log:Info("Menginisialisasi SatpolService...")
 
+    Players.PlayerAdded:Connect(function(player: Player)
+        task.defer(function()
+            self:SyncRaidStateToPlayer(player)
+        end)
+    end)
+
     -- Daftarkan folder squad di Workspace
-    local squadFolder = Workspace:FindFirstChild("SatpolSquad")
-    if not squadFolder then
-        squadFolder = Instance.new("Folder")
-        squadFolder.Name = "SatpolSquad"
-        squadFolder.Parent = Workspace
-    end
-    self._squadFolder = squadFolder :: Folder
+    self:_getSquadFolder()
 
     -- Registrasi RemoteFunction untuk pemicuan manual / pengujian razia
     NetworkBridge.RegisterServerFunction(Remotes.Functions.RequestForceRaidEvent, function(player: Player, state: string)
@@ -318,6 +399,19 @@ function SatpolService:GetRaidState(): string
     return self._currentRaidState
 end
 
+function SatpolService:SyncRaidStateToPlayer(player: Player)
+    local state = self._currentRaidState
+    if state == "Warning" then
+        local elapsed = os.clock() - self._stateStartTime
+        local rem = math.max(1, math.ceil(RAID_WARNING_DURATION - elapsed))
+        NetworkBridge.FireClient(player, Remotes.Events.RaidAlert, "Warning", rem, string.format("AWAS SATPOL PP! Razia gerobak liar dalam %d detik!", rem))
+    elseif state == "Active" then
+        local elapsed = os.clock() - self._stateStartTime
+        local rem = math.max(1, math.ceil(RAID_ACTIVE_DURATION - elapsed))
+        NetworkBridge.FireClient(player, Remotes.Events.RaidAlert, "Active", rem, "RAZIA SEDANG BERLANGSUNG! Selamatkan gerobakmu ke Safe Zone!")
+    end
+end
+
 -- ============================================================================
 -- SIKLUS HIDUP RAZIA (LIFECYCLE)
 -- ============================================================================
@@ -356,7 +450,7 @@ function SatpolService:StartActiveRaid(durationSeconds: number?): boolean
         local wpIndex = startIndices[i] or 1
         local spawnPos = PATROL_WAYPOINTS[wpIndex]
         local satpolRig = createSatpolRig(i, spawnPos)
-        satpolRig.Parent = self._squadFolder or Workspace
+        satpolRig.Parent = self:_getSquadFolder()
         table.insert(self._satpolSquad, satpolRig)
 
         task.spawn(function()
@@ -379,6 +473,17 @@ function SatpolService:EndRaid(): boolean
     self._stateStartTime = os.clock()
 
     log:Info("Razia Satpol PP telah berakhir. Menarik mundur seluruh pasukan...")
+
+    local dataService = self:_getService("DataService")
+    if dataService and dataService.RecordRaidStat then
+        local now = os.clock()
+        for _, p in Players:GetPlayers() do
+            local capTime = self._recentlyCaptured[p.UserId] or 0
+            if (now - capTime) > RAID_ACTIVE_DURATION then
+                dataService:RecordRaidStat(p, false)
+            end
+        end
+    end
 
     self:_despawnAllSatpol()
 
@@ -588,11 +693,15 @@ function SatpolService:_capturePlayerCart(satpolModel: Model, player: Player, ca
     log:Warn("PENANGKAPAN: Satpol %s berhasil menyita gerobak milik %s!", satpolModel.Name, player.Name)
     setSatpolBark(satpolModel, "TERTANGKAP! Gerobak liar disita & kas didenda 25%!")
 
-    -- 1. Penalti Sitaan Uang Kas 25% (Tabungan Bank ATM 100% AMAN!)
+    -- 1. Penalti Sitaan Uang Kas (25% standar, atau 12% dengan Rangka Anti-Razia)
     local penaltyAmount = 0
     local ecoService = self:_getService("EconomyService")
     if ecoService and ecoService.PenalizeCarriedCash then
-        penaltyAmount = ecoService:PenalizeCarriedCash(player, SATPOL_PENALTY_PERCENT)
+        local penaltyPct = SATPOL_PENALTY_PERCENT
+        if ecoService.HasUpgrade and ecoService:HasUpgrade(player, "rangka_anti_razia") then
+            penaltyPct = 0.12
+        end
+        penaltyAmount = ecoService:PenalizeCarriedCash(player, penaltyPct)
     end
 
     -- 2. Sita seluruh gorengan matang di etalase gerobak
@@ -608,6 +717,10 @@ function SatpolService:_capturePlayerCart(satpolModel: Model, player: Player, ca
     end
 
     -- 4. Kirim notifikasi tertangkap ke client untuk efek komedi / dazed HUD vignette
+    local dataService = self:_getService("DataService")
+    if dataService and dataService.RecordRaidStat then
+        dataService:RecordRaidStat(player, true)
+    end
     NetworkBridge.FireClient(player, Remotes.Events.PlayerCapturedBySatpol, penaltyAmount)
 
     log:Info("Proses eksekusi penalti penangkapan %s tuntas. Kas disita: Rp %d", player.Name, penaltyAmount)

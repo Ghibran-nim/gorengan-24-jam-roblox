@@ -35,11 +35,6 @@ function EconomyService:Init()
         self:_setupPlayerEconomy(player)
     end)
 
-    Players.PlayerRemoving:Connect(function(player: Player)
-        self._playerWallets[player.UserId] = nil
-        self._playerUpgrades[player.UserId] = nil
-    end)
-
     for _, player in Players:GetPlayers() do
         self:_setupPlayerEconomy(player)
     end
@@ -78,7 +73,73 @@ function EconomyService:Start()
     if tsMod then
         self._services.TutorialService = require(tsMod)
     end
-    log:Info("EconomyService aktif dan terhubung dengan InventoryService.")
+    local progMod = Server:FindFirstChild("ProgressionService")
+    if progMod then
+        self._services.ProgressionService = require(progMod)
+    end
+    local cartMod = Server:FindFirstChild("CartService")
+    if cartMod then
+        self._services.CartService = require(cartMod)
+    end
+    local custMod = Server:FindFirstChild("CustomerService")
+    if custMod then
+        self._services.CustomerService = require(custMod)
+    end
+    local dataMod = Server:FindFirstChild("DataService")
+    if dataMod then
+        local dataService = require(dataMod)
+        self._services.DataService = dataService
+        dataService:RegisterDomain("Economy",
+            function(player: Player, profile: any)
+                local userId = player.UserId
+                self._playerWallets[userId] = {
+                    CarriedCash = profile.Economy.CarriedCash,
+                    BankedCash = profile.Economy.BankedCash,
+                    Reputation = profile.Economy.Reputation,
+                }
+                local upgrades = {}
+                for upgId, owned in pairs(profile.Upgrades or {}) do
+                    if owned == true then
+                        upgrades[upgId] = true
+                    end
+                end
+                self._playerUpgrades[userId] = upgrades
+                self:SyncWalletToClient(player)
+                self:SyncUpgradesToClient(player)
+
+                local cartService = self._services.CartService
+                if cartService and cartService.ApplyUpgradeVisuals then
+                    for upgId, _ in pairs(upgrades) do
+                        cartService:ApplyUpgradeVisuals(player, upgId)
+                    end
+                end
+                if upgrades["kasir_npc"] then
+                    local custService = self._services.CustomerService
+                    if custService and custService.SpawnKasirForPlayer then
+                        custService:SpawnKasirForPlayer(player)
+                    end
+                end
+            end,
+            function(player: Player, profile: any)
+                local userId = player.UserId
+                local wallet = self._playerWallets[userId]
+                if wallet then
+                    profile.Economy.CarriedCash = wallet.CarriedCash
+                    profile.Economy.BankedCash = wallet.BankedCash
+                    profile.Economy.Reputation = wallet.Reputation
+                end
+                local upg = self._playerUpgrades[userId]
+                if upg then
+                    profile.Upgrades = table.clone(upg)
+                end
+            end,
+            function(userId: number)
+                self._playerWallets[userId] = nil
+                self._playerUpgrades[userId] = nil
+            end
+        )
+    end
+    log:Info("EconomyService aktif dan terhubung dengan InventoryService & ProgressionService.")
 end
 
 function EconomyService:_setupPlayerEconomy(player: Player)
@@ -111,10 +172,27 @@ function EconomyService:HasUpgrade(player: Player, upgradeId: string): boolean
     return if upgrades then (upgrades[upgradeId] == true) else false
 end
 
+function EconomyService:_notifySocialLeaderboard(player: Player)
+    local Server = script and script.Parent
+    local dataService = self._services.DataService
+    if dataService and dataService.MarkDirty then
+        dataService:MarkDirty(player, "EconomyChanged")
+    end
+    local socialMod = if Server then Server:FindFirstChild("SocialService") else nil
+    if socialMod then
+        local socialService = require(socialMod)
+        if socialService and socialService.RefreshPlayerStats then
+            socialService:RefreshPlayerStats(player)
+            socialService:ScheduleLeaderboardBroadcast()
+        end
+    end
+end
+
 function EconomyService:SyncWalletToClient(player: Player)
     local wallet = self._playerWallets[player.UserId]
     if wallet then
         NetworkBridge.FireClient(player, Remotes.Events.PlayerEconomyUpdated, wallet.CarriedCash, wallet.BankedCash, wallet.Reputation)
+        self:_notifySocialLeaderboard(player)
     end
 end
 
@@ -164,7 +242,10 @@ end
 -- TRANSAKSI TOKO BAHAN BAKU
 -- ============================================================================
 
-function EconomyService:BuyIngredient(player: Player, packId: string): { Success: boolean, Error: string?, NewCash: number?, PackName: string? }
+function EconomyService:BuyIngredient(player: Player, packId: any): { Success: boolean, Error: string?, NewCash: number?, PackName: string? }
+    if typeof(packId) ~= "string" or #packId > 40 then
+        return { Success = false, Error = "ID paket bahan tidak valid!" }
+    end
     local pack = EconomyConfig.GetIngredientPack(packId)
     if not pack then
         return { Success = false, Error = "Paket bahan baku tidak valid!" }
@@ -202,14 +283,17 @@ end
 -- TRANSAKSI UPGRADE GEROBAK
 -- ============================================================================
 
-function EconomyService:BuyUpgrade(player: Player, upgradeId: string): { Success: boolean, Error: string?, NewCash: number?, UpgradeName: string? }
+function EconomyService:BuyUpgrade(player: Player, upgradeId: any): { Success: boolean, Error: string?, NewCash: number?, UpgradeName: string? }
+    if typeof(upgradeId) ~= "string" or #upgradeId > 40 then
+        return { Success = false, Error = "ID upgrade tidak valid!" }
+    end
     local upgrade = UpgradesConfig.GetUpgrade(upgradeId)
     if not upgrade then
         return { Success = false, Error = "Item upgrade tidak dikenali!" }
     end
 
     local userId = player.UserId
-    local wallet = self._playerWallets[userId]
+    local wallet = self:GetWallet(player)
     local owned = self._playerUpgrades[userId]
 
     if not wallet or not owned then
@@ -218,6 +302,32 @@ function EconomyService:BuyUpgrade(player: Player, upgradeId: string): { Success
 
     if owned[upgradeId] then
         return { Success = false, Error = "Peningkatan ini sudah kamu miliki!" }
+    end
+
+    -- Validasi persyaratan Level
+    local progService = self._services.ProgressionService
+    if not progService and script and script.Parent then
+        local mod = script.Parent:FindFirstChild("ProgressionService")
+        if mod then progService = require(mod); self._services.ProgressionService = progService end
+    end
+    if progService and upgrade.RequiredLevel and upgrade.RequiredLevel > 1 then
+        local prog = progService:GetProgression(player)
+        if prog.Level < upgrade.RequiredLevel then
+            return {
+                Success = false,
+                Error = string.format("Membutuhkan Level %d untuk memasang %s (Level kamu: %d)!", upgrade.RequiredLevel, upgrade.Name, prog.Level),
+            }
+        end
+    end
+
+    -- Validasi prasyarat upgrade sebelumnya
+    if upgrade.PrerequisiteId and not owned[upgrade.PrerequisiteId] then
+        local prereq = UpgradesConfig.GetUpgrade(upgrade.PrerequisiteId)
+        local prereqName = if prereq then prereq.Name else upgrade.PrerequisiteId
+        return {
+            Success = false,
+            Error = string.format("Harus memiliki '%s' terlebih dahulu!", prereqName),
+        }
     end
 
     if wallet.CarriedCash < upgrade.Cost then
@@ -232,6 +342,28 @@ function EconomyService:BuyUpgrade(player: Player, upgradeId: string): { Success
     self:SyncWalletToClient(player)
     self:SyncUpgradesToClient(player)
 
+    -- Terapkan efek visual fisik ke gerobak
+    local cartService = self._services.CartService
+    if not cartService and script and script.Parent then
+        local mod = script.Parent:FindFirstChild("CartService")
+        if mod then cartService = require(mod); self._services.CartService = cartService end
+    end
+    if cartService and cartService.ApplyUpgradeVisuals then
+        cartService:ApplyUpgradeVisuals(player, upgradeId)
+    end
+
+    -- Jika upgrade adalah Kasir NPC, spawn kasir di gerobak pemain!
+    if upgradeId == "kasir_npc" then
+        local custService = self._services.CustomerService
+        if not custService and script and script.Parent then
+            local mod = script.Parent:FindFirstChild("CustomerService")
+            if mod then custService = require(mod); self._services.CustomerService = custService end
+        end
+        if custService and custService.SpawnKasirForPlayer then
+            custService:SpawnKasirForPlayer(player)
+        end
+    end
+
     local ts = self._services and self._services.TutorialService
     if ts and ts.OnUpgradeOrATMUsed then
         ts:OnUpgradeOrATMUsed(player)
@@ -244,8 +376,8 @@ end
 -- TRANSAKSI ATM
 -- ============================================================================
 
-function EconomyService:DepositToATM(player: Player, amount: number): { Success: boolean, Error: string?, CarriedCash: number?, BankedCash: number? }
-    if type(amount) ~= "number" or amount <= 0 or math.floor(amount) ~= amount then
+function EconomyService:DepositToATM(player: Player, amount: any): { Success: boolean, Error: string?, CarriedCash: number?, BankedCash: number? }
+    if type(amount) ~= "number" or amount ~= amount or amount == math.huge or amount <= 0 or math.floor(amount) ~= amount then
         return { Success = false, Error = "Jumlah setoran tidak valid!" }
     end
 
@@ -271,8 +403,8 @@ function EconomyService:DepositToATM(player: Player, amount: number): { Success:
     return { Success = true, CarriedCash = wallet.CarriedCash, BankedCash = wallet.BankedCash }
 end
 
-function EconomyService:WithdrawFromATM(player: Player, amount: number): { Success: boolean, Error: string?, CarriedCash: number?, BankedCash: number? }
-    if type(amount) ~= "number" or amount <= 0 or math.floor(amount) ~= amount then
+function EconomyService:WithdrawFromATM(player: Player, amount: any): { Success: boolean, Error: string?, CarriedCash: number?, BankedCash: number? }
+    if type(amount) ~= "number" or amount ~= amount or amount == math.huge or amount <= 0 or math.floor(amount) ~= amount then
         return { Success = false, Error = "Jumlah penarikan tidak valid!" }
     end
 

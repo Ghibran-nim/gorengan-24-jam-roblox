@@ -549,9 +549,88 @@ function MapService:BuildCompleteMap()
     self:_buildSafeAlleys(mapFolder)
     self:_buildRukoRow(mapFolder)
     self:_buildStreetProps(mapFolder)
+    self:_buildPolishDecorations(mapFolder)
 
     local elapsed = (os.clock() - startTime) * 1000
     log:Info("Peta modular berhasil dibangun dalam %.2f ms. Total instance terpasang di Workspace.Map.", elapsed)
+end
+
+function MapService:_buildPolishDecorations(mapFolder: Folder)
+    local existing = mapFolder:FindFirstChild("PolishDecorations")
+    if existing then
+        existing:Destroy()
+    end
+
+    local decoFolder = Instance.new("Folder")
+    decoFolder.Name = "PolishDecorations"
+    decoFolder.Parent = mapFolder
+
+    -- 1. Landmark Tugu Gorengan Nusantara di Central Hub Plaza (X = -146, Z = -16)
+    local tugu = Instance.new("Model")
+    tugu.Name = "TuguGorenganNusantara"
+    local base1 = createPart(tugu, "PedestalBase", Vector3.new(9, 1.4, 9), CFrame.new(-146, 2.1, -16), Color3.fromRGB(115, 115, 125), Enum.Material.Concrete, true)
+    createPart(tugu, "PedestalMid", Vector3.new(6, 2.2, 6), CFrame.new(-146, 3.9, -16), Color3.fromRGB(165, 45, 40), Enum.Material.Brick, true)
+    createPart(tugu, "Pillar", Vector3.new(2.4, 5.5, 2.4), CFrame.new(-146, 7.7, -16), Color3.fromRGB(235, 225, 200), Enum.Material.SmoothPlastic, true)
+    local goldenGorengan = createPart(tugu, "GoldenGorenganSculpture", Vector3.new(3.8, 1.4, 3.8), CFrame.new(-146, 11.2, -16) * CFrame.Angles(math.rad(12), math.rad(35), math.rad(8)), Color3.fromRGB(245, 185, 40), Enum.Material.Neon, false)
+    local tuguLight = Instance.new("PointLight")
+    tuguLight.Color = Color3.fromRGB(255, 210, 110)
+    tuguLight.Range = 22
+    tuguLight.Brightness = 1.4
+    tuguLight.Shadows = false
+    tuguLight.Parent = goldenGorengan
+    createSign(tugu, "TUGU GORENGAN", CFrame.new(-146, 2.4, -11.2), Vector2.new(6, 1.6), Color3.fromRGB(35, 35, 42), Color3.fromRGB(255, 215, 65))
+    tugu.PrimaryPart = base1
+    tugu.Parent = decoFolder
+
+    -- 2. Pos Ronda & Kentongan Bambu di gerbang Safe Zone Barat & Timur
+    local posLocations = {
+        { Name = "PosRonda_Barat", Pos = Vector3.new(-26.5, 1.4, -27) },
+        { Name = "PosRonda_Timur", Pos = Vector3.new(93.5, 1.4, -27) },
+    }
+    for _, cfg in ipairs(posLocations) do
+        local posModel = Instance.new("Model")
+        posModel.Name = cfg.Name
+        local p = cfg.Pos
+        local floor = createPart(posModel, "Floor", Vector3.new(5.5, 0.5, 5.5), CFrame.new(p.X, p.Y + 0.25, p.Z), PALETTE.WoodBrown, Enum.Material.WoodPlanks, true)
+        for _, ox in { -2.2, 2.2 } do
+            for _, oz in { -2.2, 2.2 } do
+                createPart(posModel, "Post", Vector3.new(0.45, 6, 0.45), CFrame.new(p.X + ox, p.Y + 3.2, p.Z + oz), PALETTE.WoodBrown, Enum.Material.Wood, true)
+            end
+        end
+        createPart(posModel, "Roof", Vector3.new(6.8, 0.8, 6.8), CFrame.new(p.X, p.Y + 6.4, p.Z), Color3.fromRGB(185, 50, 45), Enum.Material.Slate, false)
+        createPart(posModel, "KentonganBambu", Vector3.new(0.55, 1.8, 0.55), CFrame.new(p.X + 2.4, p.Y + 4.4, p.Z + 2.2), Color3.fromRGB(195, 160, 80), Enum.Material.Wood, false)
+        posModel.PrimaryPart = floor
+        posModel.Parent = decoFolder
+    end
+
+    -- 3. Pohon Tropis Rindang & Bangku Tongkrongan di sepanjang trotoar luar
+    local treeXs = { -138, -72, -4, 68, 128 }
+    for _, tx in ipairs(treeXs) do
+        for _, tz in { 30.5, -30.5 } do
+            local tree = Instance.new("Model")
+            tree.Name = "PohonTropis"
+            local trunk = createPart(tree, "Trunk", Vector3.new(1.5, 7, 1.5), CFrame.new(tx, 4.9, tz), Color3.fromRGB(105, 70, 45), Enum.Material.Wood, true)
+            local c1 = createPart(tree, "FoliageMain", Vector3.new(6.5, 4.2, 6.5), CFrame.new(tx, 9.6, tz), Color3.fromRGB(55, 145, 65), Enum.Material.Grass, false)
+            c1.Shape = Enum.PartType.Ball
+            local c2 = createPart(tree, "FoliageTop", Vector3.new(4.8, 3.6, 4.8), CFrame.new(tx + 1.2, 11.2, tz - 0.8), Color3.fromRGB(70, 165, 75), Enum.Material.Grass, false)
+            c2.Shape = Enum.PartType.Ball
+            tree.PrimaryPart = trunk
+            tree.Parent = decoFolder
+        end
+    end
+
+    -- 4. Bangku Tongkrongan & Tong Sampah Kebersihan Jalanan
+    local benchXs = { -102, -32, 38, 108 }
+    for _, bx in ipairs(benchXs) do
+        createPart(decoFolder, "BangkuTrotoar", Vector3.new(4.6, 0.45, 1.6), CFrame.new(bx, 2.2, 27.5), Color3.fromRGB(35, 120, 190), Enum.Material.SmoothPlastic, true)
+        createPart(decoFolder, "TongSampah", Vector3.new(1.1, 1.8, 1.1), CFrame.new(bx + 3.2, 2.3, 27.5), Color3.fromRGB(45, 155, 75), Enum.Material.Metal, true)
+    end
+
+    -- 5. Umbul-umbul Merah Putih Kampung Gorengan pada tiang jalan utama
+    for _, ux in { -120, -40, 40, 120 } do
+        createPart(decoFolder, "BenderaMerah", Vector3.new(0.15, 2.0, 2.6), CFrame.new(ux, 12.2, 16.5), Color3.fromRGB(220, 35, 35), Enum.Material.Fabric, false)
+        createPart(decoFolder, "BenderaPutih", Vector3.new(0.15, 2.0, 2.6), CFrame.new(ux, 10.2, 16.5), Color3.fromRGB(245, 245, 245), Enum.Material.Fabric, false)
+    end
 end
 
 function MapService:_indexExistingMap(mapFolder: Folder)
@@ -576,6 +655,10 @@ function MapService:_indexExistingMap(mapFolder: Folder)
                 self._plots[i] = p
             end
         end
+    end
+
+    if not mapFolder:FindFirstChild("PolishDecorations") then
+        self:_buildPolishDecorations(mapFolder)
     end
 end
 

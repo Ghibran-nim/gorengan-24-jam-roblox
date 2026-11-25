@@ -143,8 +143,8 @@ function HUDController:_createMainHUD()
     -- ========================================================================
     local dock = Instance.new("Frame")
     dock.Name = "ActionDock"
-    dock.Size = UDim2.new(0, 280, 0, 52)
-    dock.Position = UDim2.new(1, -296, 1, -66)
+    dock.Size = UDim2.new(0, 348, 0, 52)
+    dock.Position = UDim2.new(1, -364, 1, -66)
     dock.BackgroundColor3 = Color3.fromRGB(22, 24, 28)
     dock.BackgroundTransparency = 0.2
     dock.BorderSizePixel = 0
@@ -167,6 +167,7 @@ function HUDController:_createMainHUD()
     dockLayout.Parent = dock
 
     local dockButtons = {
+        { name = "RecipeBtn", icon = "📖", label = "Resep", action = "OpenRecipesModal", color = Color3.fromRGB(160, 65, 95) },
         { name = "ShopBtn", icon = "🛒", label = "Toko", action = "OpenIngredientShopModal", color = Color3.fromRGB(45, 130, 60) },
         { name = "ATMBtn", icon = "🏧", label = "ATM", action = "OpenATMModal", color = Color3.fromRGB(30, 100, 180) },
         { name = "UpgBtn", icon = "🔧", label = "Bengkel", action = "OpenUpgradeModal", color = Color3.fromRGB(180, 110, 25) },

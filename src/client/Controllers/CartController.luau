@@ -48,16 +48,66 @@ function CartController:Init()
         end
     end)
 
+    -- Sembunyikan prompt kepemilikan pada gerobak orang lain & prompt sosial pada gerobak sendiri
+    ProximityPromptService.PromptShown:Connect(function(prompt: ProximityPrompt)
+        local ownerAttr = prompt:GetAttribute("OwnerUserId")
+        local cart = prompt.Parent and prompt.Parent.Parent
+        local cartOwnerAttr = if cart then cart:GetAttribute("OwnerUserId") else nil
+        local effectiveOwner = ownerAttr or cartOwnerAttr
+
+        if prompt.Name == "SocialVisitPrompt" then
+            if effectiveOwner == localPlayer.UserId or (cart and cart.Name == "Gerobak_" .. localPlayer.Name) then
+                prompt.Enabled = false
+            end
+        elseif prompt.Name == "CookPrompt" or prompt.Name == "TakeIngredientsPrompt" or prompt.Name == "PushCartPrompt" or prompt.Name == "TakeBurntPrompt" then
+            if cart and ((cartOwnerAttr ~= nil and cartOwnerAttr ~= localPlayer.UserId) or (cartOwnerAttr == nil and cart.Name ~= "Gerobak_" .. localPlayer.Name)) then
+                prompt.Enabled = false
+            end
+        end
+    end)
+
     -- Dengarkan interaksi ProximityPrompt di seluruh gerobak
     ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, playerWhoTriggered: Player)
         if playerWhoTriggered ~= localPlayer then return end
 
+        local cart = prompt.Parent and prompt.Parent.Parent
+        local cartOwnerId = if cart then cart:GetAttribute("OwnerUserId") else nil
+        local isOwnCart = if cartOwnerId ~= nil
+            then (cartOwnerId == localPlayer.UserId)
+            else (cart ~= nil and cart.Name == "Gerobak_" .. localPlayer.Name)
+
         if prompt.Name == "CookPrompt" then
-            self:TriggerStartCooking()
+            if isOwnCart then
+                self:TriggerStartCooking()
+            end
         elseif prompt.Name == "TakeIngredientsPrompt" then
-            self:TriggerTakeIngredients()
+            if isOwnCart then
+                self:TriggerTakeIngredients()
+            end
         elseif prompt.Name == "PushCartPrompt" then
-            self:TogglePushCart()
+            if isOwnCart then
+                self:TogglePushCart()
+            end
+        elseif prompt.Name == "TakeBurntPrompt" then
+            if isOwnCart then
+                local ThrowableController = require(script.Parent:WaitForChild("ThrowableController"))
+                if ThrowableController and (ThrowableController :: any).ToggleEquipBurntFood then
+                    (ThrowableController :: any):ToggleEquipBurntFood()
+                end
+            end
+        elseif prompt.Name == "SocialVisitPrompt" then
+            local targetOwnerId = prompt:GetAttribute("OwnerUserId") or cartOwnerId
+            if typeof(targetOwnerId) == "number" and targetOwnerId ~= localPlayer.UserId then
+                local SocialController = require(script.Parent:WaitForChild("SocialController"))
+                if SocialController and (SocialController :: any).OpenCartVisitModal then
+                    (SocialController :: any):OpenCartVisitModal(targetOwnerId)
+                end
+            else
+                local HUDController = require(script.Parent:WaitForChild("HUDController"))
+                if HUDController and (HUDController :: any).ShowToastNotification then
+                    (HUDController :: any):ShowToastNotification("🛒 Ini lapakmu sendiri! Kunjungi gerobak pemain lain.", "Warning")
+                end
+            end
         end
     end)
 
@@ -167,7 +217,17 @@ function CartController:_stopPushLoop()
 end
 
 function CartController:TriggerStartCooking(recipeIdOverride: string?)
-    local recipeId = recipeIdOverride or "bakwan_sayur"
+    local recipeId = recipeIdOverride
+    if not recipeId then
+        local progMod = script.Parent:FindFirstChild("ProgressionController")
+        if progMod then
+            local progCtrl = require(progMod)
+            if progCtrl and (progCtrl :: any).GetSelectedRecipeId then
+                recipeId = (progCtrl :: any):GetSelectedRecipeId()
+            end
+        end
+    end
+    recipeId = recipeId or "bakwan_sayur"
     log:Info("Meminta server memulai memasak resep '%s'...", recipeId)
 
     local res = NetworkBridge.InvokeServer(Remotes.Functions.RequestStartCooking, recipeId)
@@ -187,6 +247,13 @@ function CartController:TriggerTakeIngredients(ingredientType: string?)
     if res then
         local HUDController = require(script.Parent:WaitForChild("HUDController"))
         if res.Success then
+            local audioMod = script.Parent:FindFirstChild("AudioVFXController")
+            if audioMod then
+                local audioCtrl = require(audioMod)
+                if audioCtrl and (audioCtrl :: any).PlayGrabIngredientFeedback then
+                    (audioCtrl :: any):PlayGrabIngredientFeedback()
+                end
+            end
             if HUDController and (HUDController :: any).ShowToastNotification then
                 (HUDController :: any):ShowToastNotification("📦 Berhasil mengambil bahan adonan & sayur!", "Success")
             end
